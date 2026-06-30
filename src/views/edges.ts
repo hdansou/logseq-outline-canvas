@@ -96,6 +96,15 @@ function makeEdge(s: Rect, t: Rect, kind: RelKind): CurveElement {
       arrowEnd: true,
     };
   }
+  // outgoing: solid line with arrowhead (directed relationship)
+  if (kind === "outgoing") {
+    return {
+      type: "curve", ...g,
+      color: t_.connectorDepends,
+      lw: 1.8,
+      arrowEnd: true,
+    };
+  }
   // relates_to: dashed, no arrowhead
   return {
     type: "curve", ...g,
@@ -183,7 +192,7 @@ export function buildEdgeLabels(
             y: mid.y - LABEL_H / 2,
             w, h: LABEL_H,
             fill: t_.bg,
-            stroke: ref.kind === "depends_on" ? t_.connectorDepends : t_.connectorRelates,
+            stroke: ref.kind === "depends_on" ? t_.connectorDepends : (ref.kind === "outgoing" ? t_.connectorDepends : t_.connectorRelates),
             lw: 1,
             rad: LABEL_H / 2,
           });
