@@ -17,6 +17,8 @@ import { layoutMindMap } from "./views/mind-map";
 import { layoutRightTree } from "./views/right-tree";
 import { layoutFishbone } from "./views/fishbone";
 import { layoutTreemap, treemapHitBoxes } from "./views/treemap";
+import { layoutErd } from "./views/erd";
+import { SidePanel, SIDE_PANEL_STYLES } from "./side-panel";
 
 const VIEWS: ViewDef[] = [
   { id: "tree", label: "Tree Chart", icon: "⎅", layout: layoutTreeChart },
@@ -27,6 +29,7 @@ const VIEWS: ViewDef[] = [
   { id: "rtree", label: "Right Tree", icon: "⊳", layout: layoutRightTree },
   { id: "fish", label: "Fishbone", icon: "⟜", layout: layoutFishbone },
   { id: "tmap", label: "Treemap", icon: "▦", layout: layoutTreemap },
+  { id: "erd", label: "ER Diagram", icon: "◈", layout: layoutErd },
 ];
 
 // Plugin state
@@ -42,6 +45,7 @@ let controllerState = createState();
 let cleanupController: (() => void) | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let isDocked = true; // default to docked mode
+let sidePanel: SidePanel | null = null;
 
 /**
  * Logseq persists plugin container layout and silently ignores
@@ -161,6 +165,25 @@ function setFocus(uuid: string | null): void {
   focusedUuid = uuid;
   composeElements();
   redraw();
+  
+  // Update side panel with selected node details
+  if (sidePanel && currentDisplayTree) {
+    const selectedNode = findNodeByUuid(currentDisplayTree, uuid);
+    sidePanel.show(selectedNode);
+  } else if (sidePanel) {
+    sidePanel.hide();
+  }
+}
+
+/** Find a node by UUID in the tree. */
+function findNodeByUuid(node: TreeNode, uuid: string | null): TreeNode | null {
+  if (!uuid) return null;
+  if (node.uuid === uuid) return node;
+  for (const child of node.children) {
+    const found = findNodeByUuid(child, uuid);
+    if (found) return found;
+  }
+  return null;
 }
 
 async function loadTree(blockUuid?: string): Promise<void> {
@@ -537,6 +560,28 @@ function setupUI(): void {
   if (!app) return;
 
   app.innerHTML = buildUI(VIEWS, activeView);
+  
+  // Inject side panel styles
+  const spStyleEl = document.createElement("style");
+  spStyleEl.textContent = SIDE_PANEL_STYLES;
+  document.head.appendChild(spStyleEl);
+  
+  // Create side panel container
+  const spContainer = document.createElement("div");
+  spContainer.id = "oc-side-panel";
+  app.appendChild(spContainer);
+  
+  // Initialize side panel
+  sidePanel = new SidePanel({ containerId: "oc-side-panel" });
+  
+  // Handle close button click
+  app.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    if (target.id === "oc-sp-close-btn") {
+      sidePanel?.hide();
+    }
+  });
+  
   setupCanvas();
 }
 
