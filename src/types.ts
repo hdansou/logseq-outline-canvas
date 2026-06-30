@@ -1,5 +1,5 @@
 /** Kinds of cross-hierarchy relationships rendered as connectors */
-export type RelKind = "relates_to" | "depends_on";
+export type RelKind = "relates_to" | "depends_on" | "outgoing";
 
 /** An outgoing relationship edge declared on a block */
 export interface NodeRef {
@@ -15,6 +15,10 @@ export interface TreeNode {
   id: number;
   uuid: string;
   refs?: NodeRef[];
+  /** Tags attached to the block, used as ERD entity types */
+  types?: string[];
+  /** Properties inherited from the block's tags */
+  properties?: Record<string, unknown>;
 }
 
 /** Positioned box element */

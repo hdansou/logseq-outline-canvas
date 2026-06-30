@@ -9,6 +9,7 @@ export interface LogseqBlock {
   title?: string;
   children?: LogseqBlock[];
   properties?: Record<string, unknown>;
+  tags?: string[];
   [key: string]: unknown;
 }
 
@@ -178,6 +179,120 @@ async function extractRefs(
   return out;
 }
 
+/**
+ * Extract Outgoing:: property references for ERD relationships.
+ * Only this property creates directed edges in ERD mode.
+ * For ERD visualization, we ONLY use Outgoing refs, ignoring legacy relates_to/depends_on.
+ */
+async function extractOutgoingRefs(
+  block: LogseqBlock,
+  idCache: Map<number, string | null>,
+  idResolver: IdResolver
+): Promise<NodeRef[]> {
+  const out: NodeRef[] = [];
+  const seen = new Set<string>();
+
+  // Check both top-level and .properties for "Outgoing" or "outgoing"
+  const checkValue = async (value: unknown) => {
+    for (const targetUuid of await extractRefUuids(value, idCache, idResolver)) {
+      if (!seen.has(targetUuid)) {
+        seen.add(targetUuid);
+        out.push({ kind: "outgoing", targetUuid });
+      }
+    }
+  };
+
+  // Top-level check
+  if (block.Outgoing) {
+    await checkValue(block.Outgoing);
+  }
+  if (block.outgoing) {
+    await checkValue(block.outgoing);
+  }
+
+  // Properties sub-object check
+  const props = block.properties;
+  if (props && typeof props === "object") {
+    if (props.Outgoing) {
+      await checkValue(props.Outgoing);
+    }
+    if (props.outgoing) {
+      await checkValue(props.outgoing);
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Extract relationships for ERD mode.
+ * In ERD mode, ONLY the Outgoing:: property creates directed edges.
+ * This replaces the legacy relates_to/depends_on behavior for ERD visualization.
+ */
+async function extractRefsForErd(
+  block: LogseqBlock,
+  idCache: Map<number, string | null>,
+  idResolver: IdResolver
+): Promise<NodeRef[]> {
+  return extractOutgoingRefs(block, idCache, idResolver);
+}
+
+/**
+ * Extract tags from a block. Tags become ERD entity types.
+ */
+function extractTypes(block: LogseqBlock): string[] {
+  const types: string[] = [];
+  
+  // Direct tags array
+  if (block.tags && Array.isArray(block.tags)) {
+    for (const tag of block.tags) {
+      // Remove # prefix if present
+      const cleanTag = tag.startsWith("#") ? tag.slice(1) : tag;
+      if (cleanTag && !types.includes(cleanTag)) {
+        types.push(cleanTag);
+      }
+    }
+  }
+
+  // Also check properties for tag-like metadata
+  const props = block.properties;
+  if (props && typeof props === "object") {
+    // Some schemas store tags differently
+    if (Array.isArray(props.tags)) {
+      for (const tag of props.tags as string[]) {
+        const cleanTag = tag.startsWith("#") ? tag.slice(1) : tag;
+        if (cleanTag && !types.includes(cleanTag)) {
+          types.push(cleanTag);
+        }
+      }
+    }
+  }
+
+  return types;
+}
+
+/**
+ * Merge properties from all tags attached to a block.
+ * In Logseq DB, tags can have properties that should be inherited.
+ * For now, we collect block properties directly.
+ */
+function extractProperties(block: LogseqBlock): Record<string, unknown> {
+  const props: Record<string, unknown> = {};
+  
+  // Collect from block.properties
+  if (block.properties && typeof block.properties === "object") {
+    Object.assign(props, block.properties);
+  }
+
+  // Exclude internal/relationship properties from display
+  delete props.relates_to;
+  delete props.depends_on;
+  delete props.Outgoing;
+  delete props.outgoing;
+
+  return props;
+}
+
 /** Default fetcher: resolves via Logseq SDK (block first, then page). */
 const defaultFetcher: RefFetcher = async (uuid) => {
   try {
@@ -234,7 +349,9 @@ async function convertBlock(
     return null;
   }
 
-  const refs = await extractRefs(block, idCache, idResolver);
+  // ERD mode: ONLY use Outgoing:: property for relationships
+  // Legacy relates_to/depends_on are ignored for ERD visualization
+  const refs = await extractRefsForErd(block, idCache, idResolver);
 
   const children: TreeNode[] = [];
   if (block.children) {
@@ -251,6 +368,8 @@ async function convertBlock(
     id: nextId++,
     uuid: block.uuid,
     refs,
+    types: extractTypes(block),
+    properties: extractProperties(block),
   };
 }
 
