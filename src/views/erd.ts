@@ -239,6 +239,34 @@ export function layoutErd(root: TreeNode, _maxDepth: number): LayoutResult {
       });
     }
     
+    // Draw Outgoing:: relationship edges as directed arrows
+    if (node.refs && node.refs.length > 0) {
+      const outgoingRefs = node.refs.filter(r => r.kind === "outgoing");
+      for (const ref of outgoingRefs) {
+        const targetRect = nodeRectsByUuid.get(ref.targetUuid);
+        if (targetRect) {
+          // Draw arrow from this node to target
+          const sx = x + size.w;
+          const sy = cy;
+          const ex = targetRect.x;
+          const ey = targetRect.y + targetRect.h / 2;
+          
+          // Curved arrow for outgoing relationship
+          const cpx = (sx + ex) / 2;
+          els.push({
+            type: "curve",
+            x1: sx, y1: sy,
+            cx1: cpx, cy1: sy,
+            cx2: cpx, cy2: ey,
+            x2: ex, y2: ey,
+            color: t.accent,
+            lw: 2,
+            arrowEnd: true,
+          });
+        }
+      }
+    }
+    
     return { cy, height: totalH };
   }
 

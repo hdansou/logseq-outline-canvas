@@ -132,7 +132,8 @@ export type ViewId =
   | "mind"
   | "rtree"
   | "fish"
-  | "tmap";
+  | "tmap"
+  | "erd";
 
 /** View registry entry */
 export interface ViewDef {
