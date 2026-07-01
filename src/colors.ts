@@ -56,6 +56,12 @@ export interface Theme {
   connectorRelates: string;
   /** Branch colors */
   colors: BranchColor[];
+  /** Surface/background for cards and panels */
+  surface: string;
+  /** Border color for boxes */
+  border: string;
+  /** Primary text color */
+  text: string;
 }
 
 const DARK_COLORS: BranchColor[] = [
@@ -102,6 +108,9 @@ const DARK_THEME: Theme = {
   connectorDepends: "#f76800d8",
   connectorRelates: "#a8a8b2a0",
   colors: DARK_COLORS,
+  surface: "#1a1d24",
+  border: "#2b2d35",
+  text: "#edeef0",
 };
 
 const LIGHT_THEME: Theme = {
@@ -126,6 +135,9 @@ const LIGHT_THEME: Theme = {
   connectorDepends: "#c44d00d8",
   connectorRelates: "#555568a0",
   colors: LIGHT_COLORS,
+  surface: "#ffffff",
+  border: "#d8dae0",
+  text: "#1a1a2e",
 };
 
 /** Active theme — mutable, updated by setTheme() */

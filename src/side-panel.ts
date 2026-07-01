@@ -1,4 +1,4 @@
-import type { TreeNode } from "../types";
+import type { TreeNode } from "./types";
 
 /**
  * Side panel for displaying selected ERD node details.
@@ -82,7 +82,7 @@ export class SidePanel {
     // Node Types (from tags)
     if (node.types && node.types.length > 0) {
       const typesHtml = node.types
-        .map((t) => `<span class="oc-sp-type-badge">${escapeHtml(t)}</span>`)
+        .map((t: string) => `<span class="oc-sp-type-badge">${escapeHtml(t)}</span>`)
         .join("");
       sections.push(`
         <div class="oc-sp-section">
@@ -115,7 +115,7 @@ export class SidePanel {
       const outgoingRefs = node.refs.filter((r) => r.kind === "outgoing");
       if (outgoingRefs.length > 0) {
         const refsHtml = outgoingRefs
-          .map((r) => `<div class="oc-sp-ref-item">→ ${escapeHtml(r.targetUuid.slice(0, 8))}...</div>`)
+          .map((r: { kind: string; targetUuid: string }) => `<div class="oc-sp-ref-item">→ ${escapeHtml(r.targetUuid.slice(0, 8))}...</div>`)
           .join("");
         sections.push(`
           <div class="oc-sp-section">
