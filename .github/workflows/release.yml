@@ -1,53 +1,48 @@
-name: Build and Release Plugin
+name: Release Plugin
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
-  issues: write
-  pull-requests: write
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: 20
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build plugin
         run: npm run build
 
-      - name: Create ZIP archive
+      - name: Read plugin id/name from package.json
+        id: pkg
         run: |
-          # Create a temporary directory for the release assets
-          mkdir -p release-assets
-          
-          # Copy necessary files to the temp directory
-          cp dist/main.js release-assets/
-          cp dist/index.html release-assets/ 2>/dev/null || true
-          cp package.json release-assets/
-          cp README.md release-assets/
-          cp -r public release-assets/
-          
-          # Create the ZIP file
-          cd release-assets
-          zip -r ../logseq-erd-plugin.zip .
-          cd ..
+          echo "name=$(node -p "require('./package.json').name")" >> "$GITHUB_OUTPUT"
 
-      - name: Upload Release Asset
-        uses: softprops/action-gh-release@v1
+      - name: Package zip
+        run: |
+          mkdir -p release
+          zip -r "release/${{ steps.pkg.outputs.name }}-${{ github.ref_name }}.zip" \
+            dist \
+            package.json \
+            README.md \
+            logo.png 2>/dev/null || true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          files: logseq-erd-plugin.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: release/*.zip
+          generate_release_notes: true
