@@ -11,6 +11,7 @@ import { layoutMindMap } from "./views/mind-map";
 import { layoutRightTree } from "./views/right-tree";
 import { layoutFishbone } from "./views/fishbone";
 import { layoutTreemap } from "./views/treemap";
+import { layoutErd } from "./views/erd";
 
 const VIEW_LAYOUTS: Record<ViewId, (root: TreeNode, maxDepth: number) => LayoutResult> = {
   tree: layoutTreeChart,
@@ -21,6 +22,7 @@ const VIEW_LAYOUTS: Record<ViewId, (root: TreeNode, maxDepth: number) => LayoutR
   rtree: layoutRightTree,
   fish: layoutFishbone,
   tmap: layoutTreemap,
+  erd: layoutErd,
 };
 
 /**
