@@ -1,0 +1,48 @@
+name: Release Plugin
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Read plugin id/name from package.json
+        id: pkg
+        run: |
+          echo "name=$(node -p "require('./package.json').name")" >> "$GITHUB_OUTPUT"
+
+      - name: Package zip
+        run: |
+          mkdir -p release
+          zip -r "release/${{ steps.pkg.outputs.name }}-${{ github.ref_name }}.zip" \
+            dist \
+            package.json \
+            README.md \
+            logo.png 2>/dev/null || true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.zip
+          generate_release_notes: true
