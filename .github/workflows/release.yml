@@ -1,7 +1,7 @@
 name: Release Plugin
 
 on:
-  push:
+  push:booooooooooooooooooooooooooooooooooooooooooo
     tags:
       - 'v*'
 
