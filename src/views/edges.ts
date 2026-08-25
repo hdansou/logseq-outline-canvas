@@ -1,4 +1,4 @@
-import type { TreeNode, RenderElement, Rect, RelKind, CurveElement } from "../types";
+import type { TreeNode, RenderElement, Rect, RelKind, CurveElement, EdgeSpec } from "../types";
 import { theme } from "../colors";
 import { REL_STYLES } from "../relations";
 
@@ -97,104 +97,126 @@ function makeEdge(s: Rect, t: Rect, kind: RelKind): CurveElement {
   };
 }
 
-/**
- * Build connector overlay elements for every NodeRef whose source and target
- * are both present in `rectsByUuid`. Caller is expected to have already
- * filtered refs via `filterIntraTreeRefs` so a missing target rect is a
- * defensive skip, not the normal path.
- *
- * When `focusedUuid` is provided, only edges involving that node (as source
- * OR target) are emitted — this is the "lazy edges" UX where the diagram
- * stays clean at rest and edges fade in only for the selected node. Pass
- * `null` to suppress all edges (used by the static PNG macro renderer).
- * Pass `undefined` to emit every edge (the eager / preview behavior).
- */
-export function buildEdgeElements(
-  root: TreeNode,
-  rectsByUuid: Map<string, Rect>,
-  focusedUuid?: string | null
-): RenderElement[] {
-  if (focusedUuid === null) return [];
-  const els: RenderElement[] = [];
-
+/** Flatten every relationship declared on a tree node into an EdgeSpec. */
+function collectSpecs(root: TreeNode): EdgeSpec[] {
+  const out: EdgeSpec[] = [];
   (function walk(node: TreeNode): void {
-    if (node.uuid && node.refs && node.refs.length) {
-      const source = rectsByUuid.get(node.uuid);
-      if (source) {
-        for (const ref of node.refs) {
-          if (focusedUuid !== undefined && node.uuid !== focusedUuid && ref.targetUuid !== focusedUuid) {
-            continue;
-          }
-          const target = rectsByUuid.get(ref.targetUuid);
-          if (!target) continue;
-          els.push(makeEdge(source, target, ref.kind));
-        }
+    if (node.uuid && node.refs) {
+      for (const ref of node.refs) {
+        out.push({ sourceUuid: node.uuid, kind: ref.kind, targetUuid: ref.targetUuid });
       }
     }
     for (const child of node.children) walk(child);
   })(root);
+  return out;
+}
 
-  return els;
+/**
+ * Resolve the specs that should actually be drawn: both endpoints must have
+ * a rect, and the focus regime must admit them.
+ *
+ * `focusedUuid` semantics (shared by every consumer):
+ * - a uuid → only edges touching that node ("lazy edges")
+ * - `undefined` → every edge (eager / preview / PNG export)
+ * - `null` → nothing
+ */
+function visibleSpecs(
+  specs: EdgeSpec[],
+  rectsByUuid: Map<string, Rect>,
+  focusedUuid?: string | null
+): { spec: EdgeSpec; source: Rect; target: Rect }[] {
+  if (focusedUuid === null) return [];
+  const out: { spec: EdgeSpec; source: Rect; target: Rect }[] = [];
+
+  for (const spec of specs) {
+    if (
+      focusedUuid !== undefined &&
+      spec.sourceUuid !== focusedUuid &&
+      spec.targetUuid !== focusedUuid
+    ) {
+      continue;
+    }
+    const source = rectsByUuid.get(spec.sourceUuid);
+    const target = rectsByUuid.get(spec.targetUuid);
+    if (!source || !target) continue;
+    out.push({ spec, source, target });
+  }
+
+  return out;
+}
+
+/**
+ * Build connector overlay elements for every relationship whose source and
+ * target both have rects. Caller is expected to have already filtered tree
+ * refs (via `filterRefsToSet`) so a missing rect is a defensive skip, not the
+ * normal path.
+ *
+ * `extraSpecs` carries edges whose source is not a tree node — ghost
+ * endpoints under `relationshipScope: "graph"`. They are styled and focused
+ * exactly like tree refs.
+ *
+ * See `visibleSpecs` for the `focusedUuid` regime.
+ */
+export function buildEdgeElements(
+  root: TreeNode,
+  rectsByUuid: Map<string, Rect>,
+  focusedUuid?: string | null,
+  extraSpecs: EdgeSpec[] = []
+): RenderElement[] {
+  return visibleSpecs(
+    [...collectSpecs(root), ...extraSpecs],
+    rectsByUuid,
+    focusedUuid
+  ).map(({ spec, source, target }) => makeEdge(source, target, spec.kind));
 }
 
 /**
  * Render property-name labels at the midpoint of every visible relationship
  * edge. Each label is a pill (solid bg-colored background so it occludes
  * crossing connectors) with the property name in muted text. Follows the
- * same focus regime as buildEdgeElements.
+ * same focus regime as buildEdgeElements, so a label never outlives its edge.
  */
 export function buildEdgeLabels(
   root: TreeNode,
   rectsByUuid: Map<string, Rect>,
-  focusedUuid?: string | null
+  focusedUuid?: string | null,
+  extraSpecs: EdgeSpec[] = []
 ): RenderElement[] {
-  if (focusedUuid === null) return [];
   const els: RenderElement[] = [];
   const t_ = theme();
 
-  (function walk(node: TreeNode): void {
-    if (node.uuid && node.refs && node.refs.length) {
-      const source = rectsByUuid.get(node.uuid);
-      if (source) {
-        for (const ref of node.refs) {
-          if (focusedUuid !== undefined && node.uuid !== focusedUuid && ref.targetUuid !== focusedUuid) {
-            continue;
-          }
-          const target = rectsByUuid.get(ref.targetUuid);
-          if (!target) continue;
+  for (const { spec, source, target } of visibleSpecs(
+    [...collectSpecs(root), ...extraSpecs],
+    rectsByUuid,
+    focusedUuid
+  )) {
+    const mid = bezierMidpoint(pickEdgeGeometry(source, target));
+    const label = spec.kind;
+    const w = label.length * LABEL_CHAR_W + LABEL_PAD_X * 2;
 
-          const g = pickEdgeGeometry(source, target);
-          const mid = bezierMidpoint(g);
-          const label = ref.kind;
-          const w = label.length * LABEL_CHAR_W + LABEL_PAD_X * 2;
-
-          // Solid bg-colored pill to occlude crossing curves for readability.
-          els.push({
-            type: "box",
-            x: mid.x - w / 2,
-            y: mid.y - LABEL_H / 2,
-            w, h: LABEL_H,
-            fill: t_.bg,
-            stroke: t_.rel[ref.kind],
-            lw: 1,
-            rad: LABEL_H / 2,
-          });
-          els.push({
-            type: "text",
-            text: label,
-            x: mid.x,
-            y: mid.y,
-            color: t_.muted,
-            size: LABEL_FONT_SIZE,
-            weight: 500,
-            align: "center",
-            baseline: "middle",
-          });
-        }
-      }
-    }
-    for (const child of node.children) walk(child);
-  })(root);
+    // Solid bg-colored pill to occlude crossing curves for readability.
+    els.push({
+      type: "box",
+      x: mid.x - w / 2,
+      y: mid.y - LABEL_H / 2,
+      w, h: LABEL_H,
+      fill: t_.bg,
+      stroke: t_.rel[spec.kind],
+      lw: 1,
+      rad: LABEL_H / 2,
+    });
+    els.push({
+      type: "text",
+      text: label,
+      x: mid.x,
+      y: mid.y,
+      color: t_.muted,
+      size: LABEL_FONT_SIZE,
+      weight: 500,
+      align: "center",
+      baseline: "middle",
+    });
+  }
 
   return els;
 }

@@ -10,28 +10,29 @@ Ran `/production-readiness` after the dock-mode rework. Baseline clean: 64 tests
 
 **Deferred:** B1 — decompose `src/index.ts` (778 lines) into `dock-mode.ts` / `macro-renderer.ts` / `event-wiring.ts`. Not urgent; pick up in a focused session.
 
-## In progress
+## Completed (unreleased)
 
 ### Feature: connector visibility + cross-graph scope (2026-08-25)
 Branch `feat/connector-visibility-and-scope`. Spec: `docs/feature-node-relationship-connectors.md` §14.
 
 **14.1 — `edgeVisibility` (lazy | always | off)**
-- [ ] Setting + `PluginSettings` type, default `lazy`
-- [ ] Map setting onto the third param of `buildEdgeElements` / `buildEdgeLabels` (uuid / undefined / null — already supported, no render changes)
-- [ ] `off` keeps badges + halo; `showRelationships` master toggle still wins
-- [ ] Tests for the mapping function
+- [x] Setting + `PluginSettings` type, default `lazy`
+- [x] Map setting onto the third param of `buildEdgeElements` / `buildEdgeLabels` (uuid / undefined / null — already supported, no render changes)
+- [x] `off` keeps badges + halo; `showRelationships` master toggle still wins
+- [x] Tests for the mapping function
 
 **14.2 — `relationshipScope` (page | graph)**
-- [ ] Setting + type, default `page`
-- [ ] Adapter: partition external refs instead of dropping them (`filterIntraTreeRefs` → keep + classify)
-- [ ] Resolve external target titles via the existing `RefFetcher`
-- [ ] Ghost layout pass: gutter placement, rects into `nodeRectsByUuid`, extend `bounds`
-- [ ] Ghost styling: dashed stroke + muted fill, visually distinct from tree nodes
-- [ ] Cap at 12 most-connected, `+N more` chip for overflow (badges still show true totals)
-- [ ] Reverse lookup: resolve property idents by title, one `datascriptQuery` per build for incoming refs
-- [ ] Tests: partition, ghost layout, cap/overflow, ident resolution
+- [x] Setting + type, default `page`
+- [x] Adapter: partition external refs instead of dropping them (`filterIntraTreeRefs` → keep + classify)
+- [x] Resolve external target titles via the existing `RefFetcher`
+- [x] Ghost layout pass: gutter placement, rects into `nodeRectsByUuid`, extend `bounds`
+- [x] Ghost styling: dashed stroke + muted fill, visually distinct from tree nodes
+- [x] Cap at 12 most-connected, `+N more` chip for overflow (badges still show true totals)
+- [x] Reverse lookup: resolve property idents by title, one `datascriptQuery` per build for incoming refs
+- [x] Tests: partition, ghost layout, cap/overflow, ident resolution
+- [x] Verified E2E in a live DB graph: ghost gutter, both directions, page-scope regression, all three visibility modes
 
-## Completed (unreleased)
+
 
 ### Feature: dockWidth setting + drag handle (2026-05-16)
 Users couldn't trade canvas width for sidebar room. Added a live drag handle and a persisted vw value.

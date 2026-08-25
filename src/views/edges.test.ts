@@ -245,3 +245,63 @@ describe("buildEdgeLabels", () => {
     expect(labelTexts(buildEdgeLabels(tree, partial))).toEqual(["depends_on"]);
   });
 });
+
+describe("extra edge specs (ghost endpoints)", () => {
+  const rects = () => new Map<string, Rect>([
+    ["A", { x: 0, y: 0, w: 100, h: 40 }],
+    ["B", { x: 200, y: 0, w: 100, h: 40 }],
+    ["GHOST", { x: 400, y: 0, w: 100, h: 40 }],
+  ]);
+
+  it("draws an edge whose source is not a tree node", () => {
+    const tree = node("A", [node("B")]);
+    const curves = curveEls(
+      buildEdgeElements(tree, rects(), undefined, [
+        { sourceUuid: "GHOST", kind: "supports", targetUuid: "B" },
+      ])
+    );
+    expect(curves).toHaveLength(1);
+    expect(curves[0].arrowEnd).toBe(true);
+  });
+
+  it("styles an extra spec by its kind, same as a tree ref", () => {
+    const tree = node("A");
+    const fromSpec = curveEls(
+      buildEdgeElements(tree, rects(), undefined, [
+        { sourceUuid: "GHOST", kind: "part_of", targetUuid: "A" },
+      ])
+    )[0];
+    const fromTree = curveEls(
+      buildEdgeElements(node("GHOST", [], [{ kind: "part_of", targetUuid: "A" }]), rects())
+    )[0];
+    expect(fromSpec.dash).toEqual(fromTree.dash);
+    expect(fromSpec.color).toBe(fromTree.color);
+  });
+
+  it("honours the focus regime for extra specs", () => {
+    const tree = node("A", [node("B")]);
+    const spec = [{ sourceUuid: "GHOST" as const, kind: "supports" as const, targetUuid: "B" }];
+    expect(curveEls(buildEdgeElements(tree, rects(), "A", spec))).toHaveLength(0);
+    expect(curveEls(buildEdgeElements(tree, rects(), "B", spec))).toHaveLength(1);
+    expect(curveEls(buildEdgeElements(tree, rects(), "GHOST", spec))).toHaveLength(1);
+    expect(curveEls(buildEdgeElements(tree, rects(), null, spec))).toHaveLength(0);
+  });
+
+  it("labels extra specs too", () => {
+    const tree = node("A");
+    const labels = buildEdgeLabels(tree, rects(), undefined, [
+      { sourceUuid: "GHOST", kind: "contradicts", targetUuid: "A" },
+    ]);
+    const texts = labels.filter((e): e is TextElement => e.type === "text").map((t) => t.text);
+    expect(texts).toEqual(["contradicts"]);
+  });
+
+  it("skips an extra spec whose endpoints have no rects", () => {
+    const tree = node("A");
+    expect(
+      buildEdgeElements(tree, rects(), undefined, [
+        { sourceUuid: "MISSING", kind: "supports", targetUuid: "A" },
+      ])
+    ).toEqual([]);
+  });
+});

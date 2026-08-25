@@ -13,6 +13,13 @@ All notable changes to OutlineCanvas are documented here. Format follows [Keep a
   Every kind gets a unique color *and* a unique dash pattern, so the encoding survives grayscale and colorblind viewing.
 - `src/relations.ts` — single registry of relationship kinds and their line styles. Adding a kind now touches three places (`RelKind`, `REL_STYLES`, the theme `rel` maps), all exhaustiveness-checked by `Record<RelKind, …>`; the adapter's property-ident regex is generated from the registry.
 
+- **`edgeVisibility` setting** (`lazy` | `always` | `off`) — connectors can now stay drawn at rest instead of appearing only for the focused node. `always` makes the on-screen view match what the PNG export has always produced; `off` drops the curves while keeping badges and the focus halo.
+- **`relationshipScope` setting** (`page` | `graph`) — `graph` renders off-page endpoints as dashed ghost nodes in a right-hand gutter so cross-page relationships stay visible:
+  - Outgoing refs to blocks on other pages are no longer dropped.
+  - Incoming refs — a block elsewhere in the graph pointing *into* this page — are recovered by one reverse Datascript query per render. These were previously invisible in principle, not just filtered: the adapter only ever walked the rendered page's own blocks.
+  - Ghosts are capped (12, most-connected first) with a `+N more off-page` note; badge counts still report true totals so a capped diagram never understates a node's connectivity.
+  - Ghosts carry their real uuid, so click-to-navigate works on them like any node.
+
 ### Changed
 
 - Theme tokens `connectorDepends` / `connectorRelates` are replaced by a per-kind `rel` color map plus `badgeOut` / `badgeIn` for the count badges (which aggregate across kinds and were never kind-specific).

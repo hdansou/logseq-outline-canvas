@@ -1,5 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { resolveNodeRefs, buildTree, filterIntraTreeRefs, flattenDeep } from "./adapter";
+import {
+  resolveNodeRefs,
+  buildTree,
+  filterIntraTreeRefs,
+  filterRefsToSet,
+  collectExternalRefs,
+  flattenDeep,
+} from "./adapter";
 import type { TreeNode } from "./types";
 
 const UUID_A = "11111111-1111-1111-1111-111111111111";
@@ -352,5 +359,57 @@ describe("flattenDeep preserves refs", () => {
     const pruned = flattenDeep(tree, 2, "recursive");
     const afterFilter = filterIntraTreeRefs(pruned);
     expect(afterFilter.children[0].refs ?? []).toEqual([]);
+  });
+});
+
+describe("collectExternalRefs", () => {
+  const node = (uuid: string, children: TreeNode[] = [], refs?: TreeNode["refs"]): TreeNode => ({
+    name: uuid, uuid, depth: 0, id: 0, children, refs,
+  });
+
+  it("returns refs whose target is outside the tree, with their source", () => {
+    const tree = node("A", [
+      node("B", [], [{ kind: "depends_on", targetUuid: "OUTSIDE" }]),
+      node("C", [], [{ kind: "supports", targetUuid: "B" }]),
+    ]);
+    expect(collectExternalRefs(tree)).toEqual([
+      { sourceUuid: "B", kind: "depends_on", targetUuid: "OUTSIDE" },
+    ]);
+  });
+
+  it("returns an empty list when every target is in the tree", () => {
+    const tree = node("A", [node("B", [], [{ kind: "supports", targetUuid: "A" }])]);
+    expect(collectExternalRefs(tree)).toEqual([]);
+  });
+
+  it("keeps one entry per source/kind/target triple, not per unique target", () => {
+    const tree = node("A", [
+      node("B", [], [{ kind: "supports", targetUuid: "OUT" }]),
+      node("C", [], [{ kind: "contradicts", targetUuid: "OUT" }]),
+    ]);
+    expect(collectExternalRefs(tree)).toHaveLength(2);
+  });
+});
+
+describe("filterRefsToSet", () => {
+  const node = (uuid: string, children: TreeNode[] = [], refs?: TreeNode["refs"]): TreeNode => ({
+    name: uuid, uuid, depth: 0, id: 0, children, refs,
+  });
+
+  it("keeps refs pointing at allowed uuids outside the tree", () => {
+    const tree = node("A", [node("B", [], [{ kind: "part_of", targetUuid: "GHOST" }])]);
+    const out = filterRefsToSet(tree, new Set(["GHOST"]));
+    expect(out.children[0].refs).toEqual([{ kind: "part_of", targetUuid: "GHOST" }]);
+  });
+
+  it("still drops refs that are neither in-tree nor allowed", () => {
+    const tree = node("A", [node("B", [], [{ kind: "part_of", targetUuid: "NOPE" }])]);
+    const out = filterRefsToSet(tree, new Set(["GHOST"]));
+    expect(out.children[0].refs ?? []).toEqual([]);
+  });
+
+  it("filterIntraTreeRefs is the empty-allowance case", () => {
+    const tree = node("A", [node("B", [], [{ kind: "part_of", targetUuid: "GHOST" }])]);
+    expect(filterIntraTreeRefs(tree)).toEqual(filterRefsToSet(tree, new Set()));
   });
 });

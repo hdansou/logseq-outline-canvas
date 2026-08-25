@@ -1,4 +1,4 @@
-import type { TreeNode, RenderElement, Rect } from "../types";
+import type { TreeNode, RenderElement, Rect, EdgeSpec } from "../types";
 import { theme } from "../colors";
 
 const BADGE_H = 16;
@@ -12,19 +12,32 @@ interface EdgeIndex {
   incoming: Map<string, number>;
 }
 
-/** Count outgoing refs by node, and incoming refs by target node. Walks once. */
-function buildIndex(root: TreeNode): EdgeIndex {
+/**
+ * Count outgoing refs by node, and incoming refs by target node. Walks once.
+ * `extraSpecs` folds in edges that no tree node declares — ghost sources
+ * under `relationshipScope: "graph"` — so a node's badge reflects every
+ * relationship touching it, not just the ones its own block spells out.
+ */
+function buildIndex(root: TreeNode, extraSpecs: EdgeSpec[]): EdgeIndex {
   const outgoing = new Map<string, number>();
   const incoming = new Map<string, number>();
+  const bump = (m: Map<string, number>, key: string): void => {
+    m.set(key, (m.get(key) ?? 0) + 1);
+  };
+
   (function walk(n: TreeNode): void {
     if (n.uuid && n.refs && n.refs.length) {
-      outgoing.set(n.uuid, n.refs.length);
-      for (const r of n.refs) {
-        incoming.set(r.targetUuid, (incoming.get(r.targetUuid) ?? 0) + 1);
-      }
+      outgoing.set(n.uuid, (outgoing.get(n.uuid) ?? 0) + n.refs.length);
+      for (const r of n.refs) bump(incoming, r.targetUuid);
     }
     for (const c of n.children) walk(c);
   })(root);
+
+  for (const spec of extraSpecs) {
+    bump(outgoing, spec.sourceUuid);
+    bump(incoming, spec.targetUuid);
+  }
+
   return { outgoing, incoming };
 }
 
@@ -65,9 +78,13 @@ function makeBadge(rect: Rect, text: string, corner: Corner, fill: string, fg: s
  * targets and they don't carry uuids, so node click-to-navigate still works
  * through the body of the box behind them.
  */
-export function buildBadges(root: TreeNode, rects: Map<string, Rect>): RenderElement[] {
+export function buildBadges(
+  root: TreeNode,
+  rects: Map<string, Rect>,
+  extraSpecs: EdgeSpec[] = []
+): RenderElement[] {
   const els: RenderElement[] = [];
-  const { outgoing, incoming } = buildIndex(root);
+  const { outgoing, incoming } = buildIndex(root, extraSpecs);
   const t = theme();
 
   for (const [uuid, rect] of rects) {

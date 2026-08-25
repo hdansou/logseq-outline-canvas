@@ -1,11 +1,29 @@
 import "@logseq/libs";
-import type { ViewId, ViewDef, RenderElement, TreeNode, LayoutResult } from "./types";
+import type {
+  ViewId,
+  ViewDef,
+  RenderElement,
+  TreeNode,
+  LayoutResult,
+  EdgeSpec,
+  RelKind,
+} from "./types";
 import { registerSettings, getSettings, DOCK_WIDTH_MIN, DOCK_WIDTH_MAX } from "./settings";
-import { fetchTree, fetchBlockTree, flattenDeep, buildTree, filterIntraTreeRefs } from "./adapter";
+import {
+  fetchTree,
+  fetchBlockTree,
+  flattenDeep,
+  buildTree,
+  filterRefsToSet,
+  collectExternalRefs,
+  defaultFetcher,
+} from "./adapter";
 import type { LogseqBlock } from "./adapter";
 import { buildEdgeElements, buildEdgeLabels } from "./views/edges";
 import { buildBadges, buildFocusHalo } from "./views/badges";
 import { edgeFocusArg } from "./views/visibility";
+import { selectGhosts, layoutGhosts, GHOST_CAP, type GhostNode } from "./views/ghosts";
+import { fetchRelationIdents, fetchIncomingRefs } from "./reverse-refs";
 import { render, hitTest } from "./renderer";
 import { createState, fitToView, zoomIn, zoomOut, attachHandlers } from "./controller";
 import { buildUI, STYLES, setActiveView, applyThemeToUI, updateDockButton, applyPlatformClass, updateFullscreenClass } from "./ui";
@@ -42,6 +60,23 @@ let ctx: CanvasRenderingContext2D | null = null;
 let controllerState = createState();
 let cleanupController: (() => void) | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Off-page endpoints for `relationshipScope: "graph"`. Resolving them needs
+ * async work (title lookups + one reverse query), but rebuildLayout is sync,
+ * so results are cached against a signature of the rendered uuid set and the
+ * refresh re-triggers a rebuild when it lands.
+ */
+interface GhostState {
+  signature: string;
+  nodes: GhostNode[];
+  /** Edges whose source is a ghost — no tree node declares these. */
+  incoming: EdgeSpec[];
+  overflow: number;
+}
+let ghostState: GhostState | null = null;
+let ghostRefreshInFlight = "";
+let relationIdents: Record<string, RelKind> | null = null;
 let isDocked = true; // default to docked mode
 
 /**
@@ -110,14 +145,20 @@ function composeElements(): void {
   // a label can never outlive the curve it belongs to.
   const focusArg = edgeFocusArg(settings.edgeVisibility, focusedUuid);
 
+  // Edges whose source is off-page: no tree node declares them, so they ride
+  // alongside the tree refs rather than inside them.
+  const ghostSpecs = settings.relationshipScope === "graph" && ghostState
+    ? ghostState.incoming
+    : [];
+
   const overlay = wantOverlay
-    ? buildEdgeElements(currentDisplayTree, rects!, focusArg)
+    ? buildEdgeElements(currentDisplayTree, rects!, focusArg, ghostSpecs)
     : [];
   const labels = wantOverlay && settings.showRelationshipLabels
-    ? buildEdgeLabels(currentDisplayTree, rects!, focusArg)
+    ? buildEdgeLabels(currentDisplayTree, rects!, focusArg, ghostSpecs)
     : [];
   const badges = wantOverlay
-    ? buildBadges(currentDisplayTree, rects!)
+    ? buildBadges(currentDisplayTree, rects!, ghostSpecs)
     : [];
   const halo = wantOverlay
     ? buildFocusHalo(focusedUuid, rects!)
@@ -125,6 +166,80 @@ function composeElements(): void {
 
   // Render order (low → high z): halo, layout elements, edges, labels, badges.
   currentElements = [...halo, ...currentLayout.elements, ...overlay, ...labels, ...badges];
+}
+
+/** Stable identity for a pruned tree: which blocks it renders, in order. */
+function treeSignature(root: TreeNode): string {
+  const parts: string[] = [];
+  (function walk(n: TreeNode): void {
+    if (n.uuid) parts.push(n.uuid);
+    for (const c of n.children) walk(c);
+  })(root);
+  return parts.join("|");
+}
+
+/** Every uuid rendered by the tree. */
+function treeUuidSet(root: TreeNode): Set<string> {
+  const out = new Set<string>();
+  (function walk(n: TreeNode): void {
+    if (n.uuid) out.add(n.uuid);
+    for (const c of n.children) walk(c);
+  })(root);
+  return out;
+}
+
+/**
+ * Resolve the off-page endpoints for `relationshipScope: "graph"`: outgoing
+ * refs the tree already declares plus incoming refs recovered by one reverse
+ * query, capped by connection count, with titles resolved for display.
+ *
+ * Fires from rebuildLayout and calls it again once resolved. Guarded against
+ * overlapping runs so a fast sequence of rebuilds doesn't stack queries.
+ */
+async function refreshGhosts(pruned: TreeNode, signature: string): Promise<void> {
+  if (ghostRefreshInFlight === signature) return;
+  ghostRefreshInFlight = signature;
+
+  try {
+    const treeUuids = treeUuidSet(pruned);
+    const outgoing = collectExternalRefs(pruned);
+
+    if (relationIdents === null) {
+      relationIdents = await fetchRelationIdents();
+    }
+    const incomingAll = await fetchIncomingRefs([...treeUuids], relationIdents);
+    // A ref declared by a block already in the tree is not "incoming" — the
+    // tree walk found it, and double-counting would inflate its badge.
+    const incoming = incomingAll.filter((s) => !treeUuids.has(s.sourceUuid));
+
+    const { uuids, overflow } = selectGhosts(
+      [...outgoing, ...incoming],
+      treeUuids,
+      GHOST_CAP
+    );
+    const chosen = new Set(uuids);
+
+    const nodes: GhostNode[] = await Promise.all(
+      uuids.map(async (uuid) => ({
+        uuid,
+        title: (await defaultFetcher(uuid))?.trim() || `\u2197 ${uuid.slice(0, 8)}`,
+      }))
+    );
+
+    ghostState = {
+      signature,
+      nodes,
+      incoming: incoming.filter((s) => chosen.has(s.sourceUuid)),
+      overflow,
+    };
+  } catch {
+    ghostState = { signature, nodes: [], incoming: [], overflow: 0 };
+  } finally {
+    ghostRefreshInFlight = "";
+  }
+
+  // Only redraw if this result is still the one the canvas wants.
+  if (currentTree) rebuildLayout();
 }
 
 /**
@@ -137,9 +252,33 @@ function rebuildLayout(): void {
   if (!currentTree) return;
   const settings = getSettings();
   const pruned = flattenDeep(currentTree, settings.maxDepth, settings.depthMode);
-  const tree = settings.showRelationships ? filterIntraTreeRefs(pruned) : pruned;
+
+  const graphScope = settings.showRelationships && settings.relationshipScope === "graph";
+  const signature = treeSignature(pruned);
+  // Depth pruning changes which blocks count as off-page, so the cache is
+  // keyed on the pruned tree, not the fetched one.
+  if (graphScope && ghostState?.signature !== signature) {
+    void refreshGhosts(pruned, signature);
+  }
+  const ghosts = graphScope && ghostState?.signature === signature ? ghostState : null;
+
+  // Refs to a ghost we chose to draw survive the filter; refs past the cap
+  // are still dropped, so we never draw an edge into empty space.
+  const allowed = new Set(ghosts?.nodes.map((n) => n.uuid) ?? []);
+  const tree = settings.showRelationships ? filterRefsToSet(pruned, allowed) : pruned;
   const view = VIEWS.find((v) => v.id === activeView)!;
-  const result = view.layout(tree, settings.maxDepth);
+  let result = view.layout(tree, settings.maxDepth);
+
+  if (ghosts && ghosts.nodes.length) {
+    const gutter = layoutGhosts(ghosts.nodes, result.bounds, ghosts.overflow);
+    const rects = new Map(result.nodeRectsByUuid ?? []);
+    for (const [uuid, rect] of gutter.rects) rects.set(uuid, rect);
+    result = {
+      elements: [...result.elements, ...gutter.elements],
+      bounds: gutter.bounds,
+      nodeRectsByUuid: rects,
+    };
+  }
 
   currentDisplayTree = tree;
   currentLayout = result;
@@ -738,6 +877,13 @@ async function main(): Promise<void> {
     if (e.key === "Escape") {
       hideCanvas();
     }
+  });
+
+  // Property idents are per-graph (they carry a graph-local suffix), so the
+  // cache must not survive a graph switch.
+  logseq.App.onCurrentGraphChanged(() => {
+    relationIdents = null;
+    ghostState = null;
   });
 
   // Live updates via DB.onChanged (debounced)

@@ -16,6 +16,17 @@ export interface NodeRef {
   targetUuid: string;
 }
 
+/**
+ * One relationship edge, flattened out of the tree. Carries its source so it
+ * can describe an edge whose source is not a tree node (a ghost, under
+ * `relationshipScope: "graph"`).
+ */
+export interface EdgeSpec {
+  sourceUuid: string;
+  kind: RelKind;
+  targetUuid: string;
+}
+
 /** Internal tree node converted from Logseq BlockEntity */
 export interface TreeNode {
   name: string;

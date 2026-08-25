@@ -99,3 +99,39 @@ describe("buildFocusHalo", () => {
     expect((box as { h: number }).h).toBeGreaterThan(60);
   });
 });
+
+describe("buildBadges with ghost edges", () => {
+  const rects = () => new Map<string, Rect>([
+    ["A", { x: 0, y: 0, w: 100, h: 40 }],
+    ["G", { x: 300, y: 0, w: 100, h: 40 }],
+  ]);
+
+  it("counts an incoming ghost edge on the tree node", () => {
+    const tree = node("A");
+    const els = buildBadges(tree, rects(), [
+      { sourceUuid: "G", kind: "supports", targetUuid: "A" },
+    ]);
+    const texts = els.filter((e) => e.type === "text").map((e) => (e as { text: string }).text);
+    expect(texts).toContain("←1");
+  });
+
+  it("counts the outgoing side on the ghost itself", () => {
+    const tree = node("A");
+    const els = buildBadges(tree, rects(), [
+      { sourceUuid: "G", kind: "supports", targetUuid: "A" },
+    ]);
+    const texts = els.filter((e) => e.type === "text").map((e) => (e as { text: string }).text);
+    expect(texts).toContain("→1");
+  });
+
+  it("adds ghost counts to existing tree-ref counts rather than replacing them", () => {
+    const tree = node("A", [], [{ kind: "depends_on", targetUuid: "G" }]);
+    const els = buildBadges(tree, rects(), [
+      { sourceUuid: "G", kind: "supports", targetUuid: "A" },
+    ]);
+    const texts = els.filter((e) => e.type === "text").map((e) => (e as { text: string }).text);
+    // A: one outgoing tree ref + one incoming ghost edge.
+    expect(texts).toContain("→1");
+    expect(texts).toContain("←1");
+  });
+});

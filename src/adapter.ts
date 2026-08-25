@@ -1,4 +1,4 @@
-import type { TreeNode, NodeRef, RelKind } from "./types";
+import type { TreeNode, NodeRef, RelKind, EdgeSpec } from "./types";
 import { REL_KIND_ALTERNATION } from "./relations";
 
 // Block shape from @logseq/libs. Properties in DB graphs can surface as
@@ -183,7 +183,7 @@ async function extractRefs(
 }
 
 /** Default fetcher: resolves via Logseq SDK (block first, then page). */
-const defaultFetcher: RefFetcher = async (uuid) => {
+export const defaultFetcher: RefFetcher = async (uuid) => {
   try {
     const block = await logseq.Editor.getBlock(uuid);
     if (block) {
@@ -407,24 +407,68 @@ export async function fetchBlockTree(
   return node;
 }
 
-/**
- * Drop any refs whose target UUID is not present elsewhere in the tree.
- * Runs after `flattenDeep` so refs into pruned subtrees are also dropped.
- * Returns a structurally-cloned tree (input untouched).
- */
-export function filterIntraTreeRefs(root: TreeNode): TreeNode {
+/** Collect every uuid present in the tree. */
+function treeUuids(root: TreeNode): Set<string> {
   const present = new Set<string>();
   (function collect(n: TreeNode): void {
     if (n.uuid) present.add(n.uuid);
     for (const c of n.children) collect(c);
   })(root);
+  return present;
+}
+
+/**
+ * Drop any refs whose target is neither in the tree nor in `alsoAllowed`.
+ * The allowance is how `relationshipScope: "graph"` keeps refs pointing at
+ * off-page targets alive: the ghost uuids selected for rendering are passed
+ * in, so refs to them survive while refs to targets we chose not to draw
+ * (over the cap) are still dropped.
+ *
+ * Runs after `flattenDeep` so refs into pruned subtrees are also dropped.
+ * Returns a structurally-cloned tree (input untouched).
+ */
+export function filterRefsToSet(root: TreeNode, alsoAllowed: Set<string>): TreeNode {
+  const present = treeUuids(root);
 
   return (function walk(n: TreeNode): TreeNode {
-    const refs = n.refs?.filter((r) => present.has(r.targetUuid));
+    const refs = n.refs?.filter(
+      (r) => present.has(r.targetUuid) || alsoAllowed.has(r.targetUuid)
+    );
     return {
       ...n,
       children: n.children.map(walk),
       refs: refs && refs.length ? refs : [],
     };
   })(root);
+}
+
+/**
+ * Drop any refs whose target UUID is not present elsewhere in the tree —
+ * the `relationshipScope: "page"` behavior.
+ */
+export function filterIntraTreeRefs(root: TreeNode): TreeNode {
+  return filterRefsToSet(root, new Set());
+}
+
+/**
+ * Refs that point outside the rendered tree, paired with the uuid of the
+ * block that declares them. These are the candidates for ghost nodes under
+ * `relationshipScope: "graph"`; under `"page"` they are simply dropped.
+ */
+export function collectExternalRefs(root: TreeNode): EdgeSpec[] {
+  const present = treeUuids(root);
+  const out: EdgeSpec[] = [];
+
+  (function walk(n: TreeNode): void {
+    if (n.uuid && n.refs) {
+      for (const r of n.refs) {
+        if (!present.has(r.targetUuid)) {
+          out.push({ sourceUuid: n.uuid, kind: r.kind, targetUuid: r.targetUuid });
+        }
+      }
+    }
+    for (const c of n.children) walk(c);
+  })(root);
+
+  return out;
 }

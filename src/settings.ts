@@ -4,6 +4,8 @@ export type DepthMode = "recursive" | "flat";
 export type DockBehavior = "mirror" | "overlay";
 /** When relationship connectors are drawn. See feature spec §14.1. */
 export type EdgeVisibility = "lazy" | "always" | "off";
+/** How far relationship connectors may reach. See feature spec §14.2. */
+export type RelationshipScope = "page" | "graph";
 
 export interface PluginSettings {
   defaultView: ViewId;
@@ -14,6 +16,7 @@ export interface PluginSettings {
   showRelationships: boolean;
   showRelationshipLabels: boolean;
   edgeVisibility: EdgeVisibility;
+  relationshipScope: RelationshipScope;
   dockBehavior: DockBehavior;
   dockWidth: number;
 }
@@ -30,6 +33,7 @@ export const DEFAULTS: PluginSettings = {
   showRelationships: true,
   showRelationshipLabels: false,
   edgeVisibility: "lazy",
+  relationshipScope: "page",
   dockBehavior: "mirror",
   dockWidth: 40,
 };
@@ -113,6 +117,16 @@ export function registerSettings(): void {
         "Lazy: connectors appear only for the node you click (default). Always: every connector stays drawn, matching what the PNG export produces. Off: no connectors, but relationship badges and the focus halo still show. The 'Show Relationship Connectors' toggle above overrides all three.",
     },
     {
+      key: "relationshipScope",
+      type: "enum",
+      enumChoices: ["page", "graph"],
+      enumPicker: "select",
+      default: DEFAULTS.relationshipScope,
+      title: "Relationship Scope",
+      description:
+        "Page: only draw connectors when both blocks are in the diagram (default). Graph: also draw connectors to and from blocks on other pages, shown as dashed 'ghost' nodes in a gutter on the right. Click a ghost to jump to that block.",
+    },
+    {
       key: "dockBehavior",
       type: "enum",
       enumChoices: ["mirror", "overlay"],
@@ -153,6 +167,9 @@ export function getSettings(): PluginSettings {
     edgeVisibility:
       (logseq.settings?.edgeVisibility as EdgeVisibility) ??
       DEFAULTS.edgeVisibility,
+    relationshipScope:
+      (logseq.settings?.relationshipScope as RelationshipScope) ??
+      DEFAULTS.relationshipScope,
     dockBehavior:
       (logseq.settings?.dockBehavior as DockBehavior) ?? DEFAULTS.dockBehavior,
     dockWidth: Math.max(

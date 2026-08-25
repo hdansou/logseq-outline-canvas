@@ -59,7 +59,9 @@ Create whichever properties you need once on any block via Logseq's property UI,
 - **Stacked-column routing**: when source and target sit in the same column, the bezier arcs outward instead of slicing through intermediate boxes.
 - **Optional labels**: enable **Label Relationship Connectors** in settings to show the property name as a small pill at each curve's midpoint.
 
-Connectors only draw between nodes already visible in the rendered subtree — external refs are dropped silently.
+**Connector visibility** — the **Connector Visibility** setting picks when curves are drawn: `lazy` (default, only for the node you click), `always` (every connector stays drawn, matching the PNG export), or `off` (no curves, but badges and halo remain).
+
+**Cross-page relationships** — by default connectors only draw between blocks both visible in the diagram; refs pointing elsewhere are dropped silently. Set **Relationship Scope** to `graph` and off-page endpoints appear as dashed *ghost* nodes in a gutter on the right, with their edges drawn normally. This works in both directions: refs *out* of the page, and refs *into* it from blocks on other pages (found via a reverse query, one per render). Ghosts are capped at 12 most-connected, with a `+N more off-page` note; click one to jump to that block. Badge counts always reflect the true totals, so a capped diagram never understates how connected a node is.
 
 ### Export
 
