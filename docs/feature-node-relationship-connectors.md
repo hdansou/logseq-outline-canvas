@@ -1,18 +1,27 @@
 # Feature: Node Relationship Connectors
 
-**Version:** 1.1
-**Date:** May 16, 2026
-**Status:** Implemented (pre-release v1.1.0)
+**Version:** 1.2
+**Date:** August 24, 2026
+**Status:** Implemented (v1.1.0; kind set extended in v1.3.0)
 **Initial Scope:** May 15, 2026
+
+**v1.2 revision (Aug 24, 2026):** the recognised relationship set grows from two kinds to five — `supports`, `contradicts` and `part_of` join `relates_to` and `depends_on`. Kinds are now declared once in `src/relations.ts` (line style) plus the theme's `rel` color map; nothing else in the pipeline is kind-aware.
 
 ---
 
 ## 1. Summary
 
-Render cross-hierarchy relationships between blocks as visual connectors on the canvas. Two user-created Logseq DB properties of type `:node` drive the overlay:
+Render cross-hierarchy relationships between blocks as visual connectors on the canvas. Five user-created Logseq DB properties of type `:node` drive the overlay:
 
-- **`relates_to`** — symmetric association between two blocks.
-- **`depends_on`** — directional dependency: source depends on target.
+| Kind | Meaning | Directed | Line |
+|---|---|---|---|
+| **`relates_to`** | symmetric association between two blocks | no | dashed `[6,4]`, lw 1.3 |
+| **`depends_on`** | source depends on target | yes | solid, lw 1.6 |
+| **`supports`** | source is evidence for target | yes | dashed `[10,3]`, lw 1.5 |
+| **`contradicts`** | source argues against target | yes | dashed `[3,3]`, lw 1.5 |
+| **`part_of`** | source is a component of target | yes | dash-dot `[9,3,2,3]`, lw 1.4 |
+
+Dash patterns are unique per kind so the encoding survives grayscale and colorblind viewing — the same accessibility rule the branch palette follows.
 
 When OutlineCanvas renders a subtree, any block carrying these properties whose target is **also** in the rendered subtree becomes a candidate for a visual connector between the two boxes. The tree hierarchy still drives layout; relationships are an overlay pass.
 
@@ -28,11 +37,11 @@ Connectors make the second graph visible without flattening the first.
 
 ### In scope (v1.1)
 
-- Reading `relates_to` and `depends_on` properties off DB-graph blocks (both top-level namespaced keys and the `.properties` sub-object, with or without leading colon).
+- Reading all five relationship properties off DB-graph blocks (both top-level namespaced keys and the `.properties` sub-object, with or without leading colon).
 - Supporting `:db.cardinality/one` and `:db.cardinality/many` value shapes, plus the four ref shapes the SDK surfaces: bare UUID string, `{"block/uuid": "..."}`, `{uuid: "..."}`, and `{id: <number>}` (numeric `:db/id` resolved via async `Editor.getBlock`).
 - Connectors in three views: **Tree Chart**, **Right Tree**, **Mind Map**.
 - Drawing connectors only between nodes already visible in the rendered subtree (intra-tree only).
-- Differentiated visual encoding: `depends_on` = solid bezier with arrowhead, `relates_to` = dashed bezier without arrow.
+- Differentiated visual encoding per kind: unique color + dash pattern, arrowhead on every directed kind (`relates_to` — the only symmetric kind — has none). Table in §1.
 - **Stacked-column routing**: when source and target share an x-range (would strike through intermediate boxes on a straight path), the curve arcs outward on the same-side faces to avoid occlusion.
 - **Lazy edges**: nothing drawn at rest. Click a node → its outgoing + incoming edges fade in. Click empty canvas → fade out. Existing click-to-navigate behaviour preserved.
 - **Badges**: every node touched by refs gets corner annotations — `→N` top-right (outgoing), `←N` bottom-right (incoming). Color-coded to match edge styles. Pure visual indicators; not hit-test targets.
@@ -47,7 +56,7 @@ Connectors make the second graph visible without flattening the first.
 
 - **External targets.** If `A depends_on B` and only A is in the rendered subtree, the edge is dropped silently. No phantom nodes, no edge-of-canvas stubs.
 - **Other views.** Treemap, Fishbone, Roadmap ↕, Roadmap →, Tree Table render source/target nodes as usual but draw no connector and show no badge.
-- **Generic property discovery.** Only `relates_to` and `depends_on` (matched by ident prefix — see §4.2). Arbitrary node-typed properties are ignored.
+- **Generic property discovery.** Only the five kinds in the registry (matched by ident prefix — see §4.2). Arbitrary node-typed properties are ignored. Adding a sixth kind is a three-line change (`RelKind`, `REL_STYLES`, both theme `rel` maps) that the `Record<RelKind, …>` types make exhaustive at compile time.
 - **Connector hover/click affordances.** Curves are not interactive — the focused-node click is the only interaction.
 - **Orthogonal / collision-avoiding edge routing.** Curves may visually cross tree branches in dense subtrees; the stacked-column routing covers the common cases but isn't a full router.
 - **Reverse-direction Datascript queries.** Edges are sourced exclusively from outgoing properties on visible nodes. A node's "incoming" count is derived by walking the in-memory tree's `refs`, not from a global graph query.
@@ -87,14 +96,15 @@ The plugin matches on the ident's local-name prefix:
 **Decision changed from initial scope.** The original plan was title-matching (resolve each property ident → its `:block/title` via `Editor.getBlock(ident)`, then check title equals `relates_to` / `depends_on`). In practice this added one extra round-trip per unique property and depended on `getBlock` accepting namespaced idents — a hard-to-verify SDK boundary. Prefix matching is:
 
 - **Synchronous and zero-cost** — no extra lookups per property.
-- **Stable enough** — the user creates properties named `relates_to` / `depends_on`; if they rename one later, the connector keeps drawing for that property. We treat this as an acceptable v1 edge case.
+- **Stable enough** — the user creates properties named after the kinds; if they rename one later, the connector keeps drawing for that property. We treat this as an acceptable v1 edge case.
 
 ### 4.3 Adapter additions
 
 `TreeNode` gains:
 
 ```ts
-export type RelKind = "relates_to" | "depends_on";
+export type RelKind =
+  | "relates_to" | "depends_on" | "supports" | "contradicts" | "part_of";
 
 interface NodeRef {
   kind: RelKind;
@@ -164,7 +174,7 @@ buildFocusHalo(focusedUuid, rectsByUuid): RenderElement[]
 ```
 
 - One pass over the tree builds `Map<uuid, outCount>` and `Map<uuid, inCount>`.
-- For each rect with non-zero counts: emit a pill (rounded box) + centered text. Outgoing badge top-right (`connectorDepends` fill), incoming bottom-right (`connectorRelates` fill). Text color: theme `bg` for inverted contrast.
+- For each rect with non-zero counts: emit a pill (rounded box) + centered text. Outgoing badge top-right (`badgeOut` fill), incoming bottom-right (`badgeIn` fill) — badge colors are kind-agnostic, since a node's counts aggregate across kinds. Text color: theme `bg` for inverted contrast.
 - Badges deliberately have no `uuid` so `hitTest` skips them — the node body underneath remains clickable.
 - Focus halo: single bordered, accent-dim-filled box drawn behind the focused rect (extends ±6px). Rendered before layout elements so it sits under the node.
 
@@ -172,8 +182,13 @@ buildFocusHalo(focusedUuid, rectsByUuid): RenderElement[]
 
 | Token | Dark | Light | Purpose |
 |---|---|---|---|
-| `connectorDepends` | `#f76800d8` | `#c44d00d8` | `depends_on` line + arrowhead + outgoing badge fill |
-| `connectorRelates` | `#a8a8b2a0` | `#555568a0` | `relates_to` dashed line + incoming badge fill |
+| `rel.relates_to` | `#a8a8b2a0` | `#555568a0` | `relates_to` line + label pill stroke |
+| `rel.depends_on` | `#f76800d8` | `#c44d00d8` | `depends_on` line + arrowhead |
+| `rel.supports` | `#46a758d8` | `#2d7a30d8` | `supports` line + arrowhead |
+| `rel.contradicts` | `#e5484dd8` | `#dc3d43d8` | `contradicts` line + arrowhead |
+| `rel.part_of` | `#6e56cfd8` | `#5746a8d8` | `part_of` line + arrowhead |
+| `badgeOut` | `#f76800d8` | `#c44d00d8` | outgoing (`→N`) badge fill |
+| `badgeIn` | `#a8a8b2a0` | `#555568a0` | incoming (`←N`) badge fill |
 
 Halo reuses existing `accent` / `accentDim`. Label pills reuse `bg` (fill) + `muted` (text).
 

@@ -40,17 +40,24 @@ A Logseq plugin that transforms hierarchical block trees into interactive visual
 
 ### Relationship Connectors
 
-Visualize cross-hierarchy relationships between blocks using two user-created DB properties of type `:node`:
+Visualize cross-hierarchy relationships between blocks using user-created DB properties of type `:node`. Five relationship kinds are recognised, each with its own color *and* its own dash pattern (so they stay distinguishable in grayscale and for colorblind readers):
 
-- **`relates_to`** — symmetric association (dashed gray line)
-- **`depends_on`** — directional dependency (solid orange arrow)
+| Property | Meaning | Line |
+| --- | --- | --- |
+| **`relates_to`** | symmetric association | dashed gray, no arrow |
+| **`depends_on`** | A needs B | solid orange arrow |
+| **`supports`** | A backs up B | long-dashed green arrow |
+| **`contradicts`** | A argues against B | short-dashed red arrow |
+| **`part_of`** | A is a component of B | dash-dot purple arrow |
 
-Create the properties once on any block via Logseq's property UI, then assign other blocks as their values. OutlineCanvas surfaces them in **Tree Chart**, **Right Tree**, and **Mind Map** views with a lazy-edges UX:
+Only `relates_to` is undirected; the other four draw an arrowhead at the target.
+
+Create whichever properties you need once on any block via Logseq's property UI, then assign other blocks as their values. Property idents are matched, so the `-XYZ` suffix Logseq appends is fine and renaming the property later doesn't break the connector. OutlineCanvas surfaces them in **Tree Chart**, **Right Tree**, and **Mind Map** views with a lazy-edges UX:
 
 - **At rest**: clean tree, no edges. Every node carrying refs shows small corner badges — `→N` outgoing (orange), `←N` incoming (gray).
 - **Click a node**: the node gets an accent halo; its outgoing + incoming edges fade in. Click another node = focus switches. Click empty canvas = unfocus.
 - **Stacked-column routing**: when source and target sit in the same column, the bezier arcs outward instead of slicing through intermediate boxes.
-- **Optional labels**: enable **Label Relationship Connectors** in settings to show the property name (`depends_on` / `relates_to`) as a small pill at each curve's midpoint.
+- **Optional labels**: enable **Label Relationship Connectors** in settings to show the property name as a small pill at each curve's midpoint.
 
 Connectors only draw between nodes already visible in the rendered subtree — external refs are dropped silently.
 

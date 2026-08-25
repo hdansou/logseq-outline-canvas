@@ -76,8 +76,8 @@ export function renderToDataURL(
  * Export the live canvas view to a PNG data URL.
  *
  * WYSIWYG: reuses the live layout, transform (current pan/zoom), and canvas
- * dimensions — what you see is what you get. All edges are drawn (both
- * `depends_on` and `relates_to`), regardless of focus state or the
+ * dimensions — what you see is what you get. All edges are drawn, whatever
+ * their relationship kind, regardless of focus state or the
  * `showRelationships` setting. Labels are included only when `showLabels`
  * is true (mirrors the live `showRelationshipLabels` setting). Badges and
  * focus halo are NOT included — exporters typically want the graph itself,

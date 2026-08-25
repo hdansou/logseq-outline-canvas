@@ -74,10 +74,10 @@ export function buildBadges(root: TreeNode, rects: Map<string, Rect>): RenderEle
     const out = outgoing.get(uuid) ?? 0;
     const inc = incoming.get(uuid) ?? 0;
     if (out > 0) {
-      els.push(...makeBadge(rect, `→${out}`, "top-right", t.connectorDepends, t.bg));
+      els.push(...makeBadge(rect, `→${out}`, "top-right", t.badgeOut, t.bg));
     }
     if (inc > 0) {
-      els.push(...makeBadge(rect, `←${inc}`, "bottom-right", t.connectorRelates, t.bg));
+      els.push(...makeBadge(rect, `←${inc}`, "bottom-right", t.badgeIn, t.bg));
     }
   }
 

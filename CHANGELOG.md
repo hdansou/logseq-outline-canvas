@@ -2,6 +2,21 @@
 
 All notable changes to OutlineCanvas are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Three new relationship kinds** alongside `relates_to` and `depends_on` — create a `:node` property with the matching ident on any block and OutlineCanvas draws the connector:
+  - **`supports`** — source is evidence for target (long-dashed green arrow).
+  - **`contradicts`** — source argues against target (short-dashed red arrow).
+  - **`part_of`** — source is a component of target (dash-dot purple arrow).
+  Every kind gets a unique color *and* a unique dash pattern, so the encoding survives grayscale and colorblind viewing.
+- `src/relations.ts` — single registry of relationship kinds and their line styles. Adding a kind now touches three places (`RelKind`, `REL_STYLES`, the theme `rel` maps), all exhaustiveness-checked by `Record<RelKind, …>`; the adapter's property-ident regex is generated from the registry.
+
+### Changed
+
+- Theme tokens `connectorDepends` / `connectorRelates` are replaced by a per-kind `rel` color map plus `badgeOut` / `badgeIn` for the count badges (which aggregate across kinds and were never kind-specific).
+
 ## [1.2.0] — 2026-05-17
 
 Docked-mode rework so the canvas and Logseq's right sidebar coexist as independent panels instead of fighting for the same slot.

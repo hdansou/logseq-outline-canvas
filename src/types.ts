@@ -1,5 +1,14 @@
-/** Kinds of cross-hierarchy relationships rendered as connectors */
-export type RelKind = "relates_to" | "depends_on";
+/**
+ * Kinds of cross-hierarchy relationships rendered as connectors. Each kind is
+ * driven by a user-created Logseq DB property of type `:node` with a matching
+ * ident. Line style lives in `relations.ts`, color in the theme's `rel` map.
+ */
+export type RelKind =
+  | "relates_to"
+  | "depends_on"
+  | "supports"
+  | "contradicts"
+  | "part_of";
 
 /** An outgoing relationship edge declared on a block */
 export interface NodeRef {

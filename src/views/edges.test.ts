@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { TreeNode, Rect, CurveElement, TextElement } from "../types";
 import { buildEdgeElements, buildEdgeLabels } from "./edges";
+import { REL_KINDS } from "../relations";
 
 const node = (uuid: string, children: TreeNode[] = [], refs?: TreeNode["refs"]): TreeNode => ({
   name: uuid, uuid, depth: 0, id: 0, children, refs,
@@ -53,6 +54,34 @@ describe("buildEdgeElements", () => {
     expect(curves[0].arrowEnd).toBeFalsy();
     expect(curves[0].dash).toBeDefined();
     expect(curves[0].dash!.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ["supports" as const, true],
+    ["contradicts" as const, true],
+    ["part_of" as const, true],
+  ])("emits a dashed curve for %s (arrow: %s)", (kind, arrow) => {
+    const tree = node("A", [], [{ kind, targetUuid: "B" }]);
+    const rects = new Map<string, Rect>([
+      ["A", { x: 0, y: 0, w: 100, h: 40 }],
+      ["B", { x: 200, y: 0, w: 100, h: 40 }],
+    ]);
+    const curves = curveEls(buildEdgeElements(tree, rects));
+    expect(curves).toHaveLength(1);
+    expect(curves[0].arrowEnd).toBe(arrow);
+    expect(curves[0].dash!.length).toBeGreaterThan(0);
+  });
+
+  it("gives every relationship kind a distinct dash signature", () => {
+    const rects = new Map<string, Rect>([
+      ["A", { x: 0, y: 0, w: 100, h: 40 }],
+      ["B", { x: 200, y: 0, w: 100, h: 40 }],
+    ]);
+    const signatures = REL_KINDS.map((kind) => {
+      const c = curveEls(buildEdgeElements(node("A", [], [{ kind, targetUuid: "B" }]), rects))[0];
+      return `${(c.dash ?? []).join(",")}|${c.arrowEnd ? "arrow" : ""}`;
+    });
+    expect(new Set(signatures).size).toBe(REL_KINDS.length);
   });
 
   it("horizontally-separated targets anchor on right/left faces", () => {

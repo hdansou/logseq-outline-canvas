@@ -1,5 +1,6 @@
 import type { TreeNode, RenderElement, Rect, RelKind, CurveElement } from "../types";
 import { theme } from "../colors";
+import { REL_STYLES } from "../relations";
 
 interface Edge {
   x1: number; y1: number;
@@ -85,23 +86,14 @@ const LABEL_PAD_X = 7;
 const LABEL_CHAR_W = LABEL_FONT_SIZE * 0.62; // IBM Plex Mono approx
 
 function makeEdge(s: Rect, t: Rect, kind: RelKind): CurveElement {
-  const g = pickEdgeGeometry(s, t);
-  const t_ = theme();
-
-  if (kind === "depends_on") {
-    return {
-      type: "curve", ...g,
-      color: t_.connectorDepends,
-      lw: 1.6,
-      arrowEnd: true,
-    };
-  }
-  // relates_to: dashed, no arrowhead
+  const style = REL_STYLES[kind];
   return {
-    type: "curve", ...g,
-    color: t_.connectorRelates,
-    lw: 1.3,
-    dash: [6, 4],
+    type: "curve",
+    ...pickEdgeGeometry(s, t),
+    color: theme().rel[kind],
+    lw: style.lw,
+    ...(style.dash ? { dash: style.dash } : {}),
+    ...(style.arrowEnd ? { arrowEnd: true } : {}),
   };
 }
 
@@ -183,7 +175,7 @@ export function buildEdgeLabels(
             y: mid.y - LABEL_H / 2,
             w, h: LABEL_H,
             fill: t_.bg,
-            stroke: ref.kind === "depends_on" ? t_.connectorDepends : t_.connectorRelates,
+            stroke: t_.rel[ref.kind],
             lw: 1,
             rad: LABEL_H / 2,
           });

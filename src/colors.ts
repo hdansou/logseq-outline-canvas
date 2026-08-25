@@ -1,3 +1,5 @@
+import type { RelKind } from "./types";
+
 /** Deuteranopia-safe color palette — 8 colors with unique dash patterns */
 export interface BranchColor {
   /** Solid fill (18% alpha) */
@@ -50,10 +52,12 @@ export interface Theme {
   accentText: string;
   /** Spine dot inner fill */
   spineDotInner: string;
-  /** Connector overlay: depends_on edge (solid + arrowhead) */
-  connectorDepends: string;
-  /** Connector overlay: relates_to edge (dashed, no arrow) */
-  connectorRelates: string;
+  /** Connector overlay: line color per relationship kind */
+  rel: Record<RelKind, string>;
+  /** Outgoing-count badge fill */
+  badgeOut: string;
+  /** Incoming-count badge fill */
+  badgeIn: string;
   /** Branch colors */
   colors: BranchColor[];
 }
@@ -99,8 +103,15 @@ const DARK_THEME: Theme = {
   accentDim: "#46a75820",
   accentText: "#7ccf8e",
   spineDotInner: "#0d0f14",
-  connectorDepends: "#f76800d8",
-  connectorRelates: "#a8a8b2a0",
+  rel: {
+    relates_to: "#a8a8b2a0",
+    depends_on: "#f76800d8",
+    supports: "#46a758d8",
+    contradicts: "#e5484dd8",
+    part_of: "#6e56cfd8",
+  },
+  badgeOut: "#f76800d8",
+  badgeIn: "#a8a8b2a0",
   colors: DARK_COLORS,
 };
 
@@ -123,8 +134,15 @@ const LIGHT_THEME: Theme = {
   accentDim: "#46a75818",
   accentText: "#2d7a30",
   spineDotInner: "#f8f9fa",
-  connectorDepends: "#c44d00d8",
-  connectorRelates: "#555568a0",
+  rel: {
+    relates_to: "#555568a0",
+    depends_on: "#c44d00d8",
+    supports: "#2d7a30d8",
+    contradicts: "#dc3d43d8",
+    part_of: "#5746a8d8",
+  },
+  badgeOut: "#c44d00d8",
+  badgeIn: "#555568a0",
   colors: LIGHT_COLORS,
 };
 

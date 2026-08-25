@@ -1,4 +1,5 @@
 import type { TreeNode, NodeRef, RelKind } from "./types";
+import { REL_KIND_ALTERNATION } from "./relations";
 
 // Block shape from @logseq/libs. Properties in DB graphs can surface as
 // namespaced top-level keys (e.g. `user.property/foo-XYZ`) AND/OR inside a
@@ -25,13 +26,16 @@ const REF_RE = /\[\[([^\[\]]+)\]\]/g;
 const MAX_REF_DEPTH = 3;
 
 /**
- * Match property keys of the form `user.property/relates_to-<suffix>` or
- * `user.property/depends_on-<suffix>`. Leading colon (namespaced-keyword form)
- * tolerated. Suffix part is optional (matches built-in `relates_to` too if
- * Logseq ever ships one). Match on ident is rename-stable; if a user renames
- * the property after creation the connector keeps drawing — acceptable v1.
+ * Match property keys of the form `user.property/<kind>-<suffix>` for any kind
+ * in the relationship registry (relates_to, depends_on, supports, contradicts,
+ * part_of). Leading colon (namespaced-keyword form) tolerated. Suffix part is
+ * optional (matches a built-in ident too, should Logseq ever ship one). Match
+ * on ident is rename-stable; if a user renames the property after creation the
+ * connector keeps drawing — acceptable v1.
  */
-const REL_KEY_RE = /^:?user\.property\/(relates_to|depends_on)(?:-[A-Za-z0-9_-]+)?$/;
+const REL_KEY_RE = new RegExp(
+  `^:?user\\.property\\/(${REL_KIND_ALTERNATION})(?:-[A-Za-z0-9_-]+)?$`
+);
 
 /**
  * Replace `[[uuid]]` node references inside text with the referenced entity's

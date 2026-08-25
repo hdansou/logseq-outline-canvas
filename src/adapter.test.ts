@@ -118,7 +118,7 @@ describe("buildTree (end-to-end ref resolution)", () => {
   });
 });
 
-describe("buildTree with relates_to / depends_on properties", () => {
+describe("buildTree with relationship properties", () => {
   const PROP_RELATES = "user.property/relates_to-HG66AZUl";
   const PROP_DEPENDS = "user.property/depends_on-SfjMwya6";
   const PROP_RELATES_COLON = ":user.property/relates_to-HG66AZUl";
@@ -230,7 +230,40 @@ describe("buildTree with relates_to / depends_on properties", () => {
     expect(idResolver).toHaveBeenCalledTimes(1);
   });
 
-  it("ignores user-properties whose ident is not relates_to / depends_on", async () => {
+  it.each([
+    ["supports", "user.property/supports-Qz1aB2"],
+    ["contradicts", "user.property/contradicts-Rt7cD9"],
+    ["part_of", "user.property/part_of-Uv3eF4"],
+  ])("extracts %s refs", async (kind, propKey) => {
+    const fetcher = vi.fn(async () => null);
+    const blocks = [
+      { uuid: "c", title: "Block", properties: { [propKey]: { "block/uuid": TGT_A } }, children: [] },
+    ];
+    const tree = await buildTree(blocks, "Page", false, fetcher, noResolve);
+    expect(tree.refs).toEqual([{ kind, targetUuid: TGT_A }]);
+  });
+
+  it("keeps refs of different kinds on the same block distinct", async () => {
+    const fetcher = vi.fn(async () => null);
+    const blocks = [
+      {
+        uuid: "c",
+        title: "Block",
+        properties: {
+          "user.property/supports-Qz1aB2": { "block/uuid": TGT_A },
+          "user.property/contradicts-Rt7cD9": { "block/uuid": TGT_A },
+        },
+        children: [],
+      },
+    ];
+    const tree = await buildTree(blocks, "Page", false, fetcher, noResolve);
+    expect(tree.refs).toEqual([
+      { kind: "supports", targetUuid: TGT_A },
+      { kind: "contradicts", targetUuid: TGT_A },
+    ]);
+  });
+
+  it("ignores user-properties whose ident is not a known relationship kind", async () => {
     const fetcher = vi.fn(async () => null);
     const blocks = [
       {

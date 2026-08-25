@@ -88,7 +88,7 @@ export function registerSettings(): void {
       default: DEFAULTS.showRelationships,
       title: "Show Relationship Connectors",
       description:
-        "Draw lines between blocks that reference each other via 'relates_to' or 'depends_on' node properties (Tree Chart, Right Tree, Mind Map only).",
+        "Draw lines between blocks that reference each other via 'relates_to', 'depends_on', 'supports', 'contradicts' or 'part_of' node properties (Tree Chart, Right Tree, Mind Map only).",
     },
     {
       key: "showRelationshipLabels",
@@ -96,7 +96,7 @@ export function registerSettings(): void {
       default: DEFAULTS.showRelationshipLabels,
       title: "Label Relationship Connectors",
       description:
-        "Display the property name ('depends_on' / 'relates_to') as a small pill at the midpoint of each connector. Useful as a visual cue at first; turn off once the line styles are familiar.",
+        "Display the property name ('depends_on', 'supports', …) as a small pill at the midpoint of each connector. Useful as a visual cue at first; turn off once the line styles are familiar.",
     },
     {
       key: "dockBehavior",
