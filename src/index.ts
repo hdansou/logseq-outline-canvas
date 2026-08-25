@@ -5,6 +5,7 @@ import { fetchTree, fetchBlockTree, flattenDeep, buildTree, filterIntraTreeRefs 
 import type { LogseqBlock } from "./adapter";
 import { buildEdgeElements, buildEdgeLabels } from "./views/edges";
 import { buildBadges, buildFocusHalo } from "./views/badges";
+import { edgeFocusArg } from "./views/visibility";
 import { render, hitTest } from "./renderer";
 import { createState, fitToView, zoomIn, zoomOut, attachHandlers } from "./controller";
 import { buildUI, STYLES, setActiveView, applyThemeToUI, updateDockButton, applyPlatformClass, updateFullscreenClass } from "./ui";
@@ -105,11 +106,15 @@ function composeElements(): void {
   const rects = currentLayout.nodeRectsByUuid;
   const wantOverlay = settings.showRelationships && !!rects;
 
+  // `edgeVisibility` decides the focus regime; edges and labels share it so
+  // a label can never outlive the curve it belongs to.
+  const focusArg = edgeFocusArg(settings.edgeVisibility, focusedUuid);
+
   const overlay = wantOverlay
-    ? buildEdgeElements(currentDisplayTree, rects!, focusedUuid)
+    ? buildEdgeElements(currentDisplayTree, rects!, focusArg)
     : [];
   const labels = wantOverlay && settings.showRelationshipLabels
-    ? buildEdgeLabels(currentDisplayTree, rects!, focusedUuid)
+    ? buildEdgeLabels(currentDisplayTree, rects!, focusArg)
     : [];
   const badges = wantOverlay
     ? buildBadges(currentDisplayTree, rects!)

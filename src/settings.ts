@@ -2,6 +2,8 @@ import type { ViewId } from "./types";
 
 export type DepthMode = "recursive" | "flat";
 export type DockBehavior = "mirror" | "overlay";
+/** When relationship connectors are drawn. See feature spec §14.1. */
+export type EdgeVisibility = "lazy" | "always" | "off";
 
 export interface PluginSettings {
   defaultView: ViewId;
@@ -11,6 +13,7 @@ export interface PluginSettings {
   animateViewSwitch: boolean;
   showRelationships: boolean;
   showRelationshipLabels: boolean;
+  edgeVisibility: EdgeVisibility;
   dockBehavior: DockBehavior;
   dockWidth: number;
 }
@@ -26,6 +29,7 @@ export const DEFAULTS: PluginSettings = {
   animateViewSwitch: true,
   showRelationships: true,
   showRelationshipLabels: false,
+  edgeVisibility: "lazy",
   dockBehavior: "mirror",
   dockWidth: 40,
 };
@@ -99,6 +103,16 @@ export function registerSettings(): void {
         "Display the property name ('depends_on', 'supports', …) as a small pill at the midpoint of each connector. Useful as a visual cue at first; turn off once the line styles are familiar.",
     },
     {
+      key: "edgeVisibility",
+      type: "enum",
+      enumChoices: ["lazy", "always", "off"],
+      enumPicker: "select",
+      default: DEFAULTS.edgeVisibility,
+      title: "Connector Visibility",
+      description:
+        "Lazy: connectors appear only for the node you click (default). Always: every connector stays drawn, matching what the PNG export produces. Off: no connectors, but relationship badges and the focus halo still show. The 'Show Relationship Connectors' toggle above overrides all three.",
+    },
+    {
       key: "dockBehavior",
       type: "enum",
       enumChoices: ["mirror", "overlay"],
@@ -136,6 +150,9 @@ export function getSettings(): PluginSettings {
     showRelationshipLabels:
       (logseq.settings?.showRelationshipLabels as boolean) ??
       DEFAULTS.showRelationshipLabels,
+    edgeVisibility:
+      (logseq.settings?.edgeVisibility as EdgeVisibility) ??
+      DEFAULTS.edgeVisibility,
     dockBehavior:
       (logseq.settings?.dockBehavior as DockBehavior) ?? DEFAULTS.dockBehavior,
     dockWidth: Math.max(

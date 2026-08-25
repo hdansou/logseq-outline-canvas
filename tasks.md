@@ -1,6 +1,6 @@
 # OutlineCanvas — Task Tracker
 
-**Last Updated:** 2026-05-16
+**Last Updated:** 2026-08-25
 
 ## Production-hardening pass (2026-05-16)
 
@@ -9,6 +9,27 @@ Ran `/production-readiness` after the dock-mode rework. Baseline clean: 64 tests
 **Applied:** C1 (CHANGELOG `[Unreleased]` section describing `dockBehavior`, `dockWidth`, drag handle), C2 (README docked-mode section rewritten to match the new behavior).
 
 **Deferred:** B1 — decompose `src/index.ts` (778 lines) into `dock-mode.ts` / `macro-renderer.ts` / `event-wiring.ts`. Not urgent; pick up in a focused session.
+
+## In progress
+
+### Feature: connector visibility + cross-graph scope (2026-08-25)
+Branch `feat/connector-visibility-and-scope`. Spec: `docs/feature-node-relationship-connectors.md` §14.
+
+**14.1 — `edgeVisibility` (lazy | always | off)**
+- [ ] Setting + `PluginSettings` type, default `lazy`
+- [ ] Map setting onto the third param of `buildEdgeElements` / `buildEdgeLabels` (uuid / undefined / null — already supported, no render changes)
+- [ ] `off` keeps badges + halo; `showRelationships` master toggle still wins
+- [ ] Tests for the mapping function
+
+**14.2 — `relationshipScope` (page | graph)**
+- [ ] Setting + type, default `page`
+- [ ] Adapter: partition external refs instead of dropping them (`filterIntraTreeRefs` → keep + classify)
+- [ ] Resolve external target titles via the existing `RefFetcher`
+- [ ] Ghost layout pass: gutter placement, rects into `nodeRectsByUuid`, extend `bounds`
+- [ ] Ghost styling: dashed stroke + muted fill, visually distinct from tree nodes
+- [ ] Cap at 12 most-connected, `+N more` chip for overflow (badges still show true totals)
+- [ ] Reverse lookup: resolve property idents by title, one `datascriptQuery` per build for incoming refs
+- [ ] Tests: partition, ghost layout, cap/overflow, ident resolution
 
 ## Completed (unreleased)
 

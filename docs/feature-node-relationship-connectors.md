@@ -5,6 +5,8 @@
 **Status:** Implemented (v1.1.0; kind set extended in v1.3.0)
 **Initial Scope:** May 15, 2026
 
+**v1.3 revision (Aug 25, 2026):** two follow-ups driven by live use — connectors can now stay drawn at rest (`edgeVisibility`) and can reach targets outside the rendered page (`relationshipScope`). See §14.
+
 **v1.2 revision (Aug 24, 2026):** the recognised relationship set grows from two kinds to five — `supports`, `contradicts` and `part_of` join `relates_to` and `depends_on`. Kinds are now declared once in `src/relations.ts` (line style) plus the theme's `rel` color map; nothing else in the pipeline is kind-aware.
 
 ---
@@ -208,6 +210,8 @@ focus halo
 |---|---|---|---|
 | `showRelationships` | `boolean` | `true` | Master toggle. When off, edges + badges + halo + labels all suppressed; canvas renders as v1.0. |
 | `showRelationshipLabels` | `boolean` | `false` | Show property-name labels at curve midpoints. Useful at first; off-by-default to keep the diagram quiet once line styles become familiar. |
+| `edgeVisibility` | `enum` | `"lazy"` | When edges are drawn: `lazy` (only for the focused node — the v1.1 behavior), `always` (every edge, all the time), `off` (never; badges and halo still render). See §14.1. |
+| `relationshipScope` | `enum` | `"page"` | How far refs may reach: `page` (both endpoints must be in the rendered tree — the v1.1 behavior) or `graph` (off-page endpoints render as ghost nodes in a gutter). See §14.2. |
 
 No per-property toggle, no per-view toggle.
 
@@ -287,3 +291,57 @@ Manual smoke (not automated):
 - **Property keys come with a leading colon** in some SDK paths (`:user.property/...`) and without in others. The prefix regex handles both.
 - **`block.properties` is mostly empty in DB graphs.** The top-level-key iteration is the primary path; the `.properties` fallback rarely fires but is kept for defense in depth.
 - **`Editor.getBlock(<numeric id>)` works reliably.** The original concern about needing `DB.datascriptQuery` fallback never materialized.
+
+## 14. Connector Visibility & Scope (v1.3)
+
+### 14.1 `edgeVisibility` — connectors that persist
+
+Lazy edges keep a dense diagram readable, but they make the *shape* of the relationship graph invisible until you start clicking, and they diverge from the PNG export, which has always drawn every edge regardless of focus. `edgeVisibility` makes the regime a user choice:
+
+| Value | Edges | Halo | Badges |
+|---|---|---|---|
+| `lazy` (default) | only those touching the focused node | yes | yes |
+| `always` | all of them, at rest | yes (still marks the focused node) | yes |
+| `off` | none | yes | yes |
+
+No new rendering code is required. `buildEdgeElements(root, rects, focusedUuid?)` already encodes all three regimes in its third parameter: a uuid means lazy, `undefined` means emit everything (what the exporter passes), `null` means suppress. The setting maps onto that parameter:
+
+```
+lazy   -> focusedUuid          (string | null)
+always -> undefined
+off    -> null
+```
+
+`buildEdgeLabels` follows the same regime so labels never outlive their edges. Focus itself is unchanged in every mode — clicking still navigates and still paints the halo, because with `always` the user still needs to know which node they selected.
+
+**Interaction with `showRelationships`.** The master toggle still wins: when it is off, nothing in the overlay renders regardless of `edgeVisibility`. `off` is therefore *not* redundant with it — `off` keeps badges and halo (the discovery signal) while dropping only the curves.
+
+### 14.2 `relationshipScope` — connectors across the graph
+
+Today `filterIntraTreeRefs` drops any ref whose target is not already a node in the rendered tree, so a relationship that crosses a page boundary vanishes silently. `relationshipScope: "graph"` keeps those relationships by giving their off-page endpoints somewhere to live.
+
+**Ghost nodes.** The insight that keeps this cheap: edges, labels, and badges are computed purely from `LayoutResult.nodeRectsByUuid`. An off-page endpoint therefore needs a *rect*, not a view-engine change. After the active view returns its layout, a post-layout pass:
+
+1. Collects every external target uuid (deduped) and resolves its title through the existing `RefFetcher` (block title, then page title, then `↗ <8-char uuid>`).
+2. Lays each out as a compact node stacked in a gutter to the right of `bounds`, visually distinct from tree nodes (dashed stroke, muted fill) so a ghost never reads as part of the hierarchy.
+3. Inserts each rect into `nodeRectsByUuid` and extends `bounds` to cover the gutter.
+
+Everything downstream then works unchanged. Ghosts carry their real uuid, so the existing hit-test gives click-to-navigate for free.
+
+**Incoming edges are a separate problem.** Refs are discovered by walking the blocks *of the rendered page*, so a block elsewhere in the graph that declares `supports -> <block on this page>` is invisible no matter what the filter does. Recovering those needs one reverse query per tree build:
+
+- Resolve the five property idents once per graph (they carry per-graph suffixes, e.g. `:user.property/supports-rsddWi2L`), by title.
+- One `logseq.DB.datascriptQuery` finding blocks whose value for any of those idents is one of the rendered tree's block ids.
+- Each hit becomes a ghost *source*, drawn with the same kind styling; direction is preserved (ghost -> tree node).
+
+One query per build, not one per node.
+
+**Caps.** Fan-in and fan-out are unbounded in a real graph. Ghosts are capped (default 12, most-connected first); the overflow is reported as a single `+N more` chip in the gutter rather than silently truncated. Badge counts always reflect the *true* totals, so a capped diagram never lies about how connected a node is.
+
+**Defaults and blast radius.** `relationshipScope` defaults to `page`, so existing graphs render exactly as before. The three recursive views (Tree Chart, Right Tree, Mind Map) are the only ones affected, as with every other part of the overlay.
+
+**Not in scope.** A multi-page force-directed graph view. That is a new view with its own layout engine, camera, and performance story — not an extension of this overlay.
+
+### 14.3 Authoring is still out of scope
+
+Worth recording, since it constrains any future "draw an edge on the canvas" feature: plugins may *assign* values to existing user properties, but Logseq rejects creating them — `upsertProperty(":user.property/...")` fails with *"Plugins can only upsert its own properties"*, and properties a plugin creates land under `:plugin.property.<pid>/...`, which the adapter deliberately does not match. Any authoring UI would depend on the user having created the five properties by hand first.
