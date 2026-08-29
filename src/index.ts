@@ -563,6 +563,22 @@ function setupResizeHandle(pluginId: string): void {
   handle.addEventListener("pointercancel", endDrag);
 }
 
+/**
+ * Flip page <-> graph scope. Shared by the global keybinding, the in-iframe
+ * key handler, and the command palette so all three stay in step.
+ */
+function toggleRelationshipScope(): void {
+  const next = getSettings().relationshipScope === "graph" ? "page" : "graph";
+  logseq.updateSettings({ relationshipScope: next });
+  logseq.UI.showMsg(
+    next === "graph"
+      ? "OutlineCanvas: relationships across the graph"
+      : "OutlineCanvas: relationships on this page only",
+    "success",
+    { timeout: 2000 }
+  );
+}
+
 function toggleDockMode(): void {
   isDocked = !isDocked;
   applyDockMode();
@@ -696,7 +712,19 @@ function setupCanvas(): void {
   const togglePopover = (force?: boolean): void => {
     if (!popover) return;
     const next = force ?? popover.hidden;
-    if (next) renderPopover();
+    if (next) {
+      renderPopover();
+      // Anchor under the button rather than a fixed offset: the toolbar wraps
+      // to two or three rows in docked mode, and a constant top would put the
+      // panel over the view switcher.
+      const anchor = document.getElementById("oc-relations");
+      const root = document.querySelector(".oc-root");
+      if (anchor && root) {
+        const a = anchor.getBoundingClientRect();
+        const r = root.getBoundingClientRect();
+        popover.style.top = `${a.bottom - r.top + 6}px`;
+      }
+    }
     popover.hidden = !next;
   };
 
@@ -747,10 +775,15 @@ function setupCanvas(): void {
 
   // Click anywhere else closes it — including on the canvas, where a click
   // also changes focus and would otherwise leave a stale panel floating.
+  //
+  // Tests `composedPath` rather than `contains`: a click on a popover control
+  // re-renders the popover's innerHTML, so by the time this listener runs the
+  // clicked node has been detached and `contains` reports false — which would
+  // close the panel on every interaction. The path is captured at dispatch.
   document.addEventListener("click", (e) => {
     if (!popover || popover.hidden) return;
-    const target = e.target as HTMLElement | null;
-    if (popover.contains(target) || target?.closest("#oc-relations")) return;
+    if (e.composedPath().includes(popover)) return;
+    if ((e.target as HTMLElement | null)?.closest("#oc-relations")) return;
     popover.hidden = true;
   });
 
@@ -934,17 +967,7 @@ async function main(): Promise<void> {
         binding: "mod+shift+g",
       },
     },
-    async () => {
-      const next = getSettings().relationshipScope === "graph" ? "page" : "graph";
-      logseq.updateSettings({ relationshipScope: next });
-      logseq.UI.showMsg(
-        next === "graph"
-          ? "OutlineCanvas: showing relationships across the graph"
-          : "OutlineCanvas: showing relationships on this page only",
-        "success",
-        { timeout: 2000 }
-      );
-    }
+    async () => toggleRelationshipScope()
   );
 
   // Toolbar button
@@ -1065,6 +1088,14 @@ async function main(): Promise<void> {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       hideCanvas();
+      return;
+    }
+    // The host's mod+shift+g never fires while the canvas iframe holds focus —
+    // which is exactly when you want it, since the shortcut exists to flip
+    // scope while looking at a diagram. Handle it here too.
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "g") {
+      e.preventDefault();
+      toggleRelationshipScope();
     }
   });
 

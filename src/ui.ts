@@ -391,6 +391,7 @@ html, body, #app {
    large vocabulary can't push the canvas around. */
 .oc-popover {
   position: absolute;
+  /* top is set at open time, anchored under the toolbar button */
   top: 44px;
   right: 10px;
   z-index: 20;

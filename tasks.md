@@ -10,36 +10,37 @@ Ran `/production-readiness` after the dock-mode rework. Baseline clean: 64 tests
 
 **Deferred:** B1 — decompose `src/index.ts` (778 lines) into `dock-mode.ts` / `macro-renderer.ts` / `event-wiring.ts`. Not urgent; pick up in a focused session.
 
-## Scoped, not started
+## Completed (unreleased)
 
 ### Feature: user-defined kinds + Relations popover (2026-08-29)
 Spec: `docs/feature-node-relationship-connectors.md` §15. Sequenced so the registry lands before the surface that exposes it.
 
 **15.3 — registry plumbing (the bulk of the work)**
-- [ ] `identToKind` map replaces `REL_KEY_RE`; thread it into `buildTree` (async dependency, one cached query per graph)
-- [ ] Share + invalidate the cache with `reverse-refs.ts` (already resets on `onCurrentGraphChanged`)
-- [ ] `RelKind` stops being a closed union: built-ins as named constants, custom kinds as registry-resolved strings
-- [ ] Tests: merge precedence, collision handling, cache invalidation
+- [x] `identToKind` map replaces `REL_KEY_RE`; thread it into `buildTree` (async dependency, one cached query per graph)
+- [x] Share + invalidate the cache with `reverse-refs.ts` (already resets on `onCurrentGraphChanged`)
+- [x] `RelKind` stops being a closed union: built-ins as named constants, custom kinds as registry-resolved strings
+- [x] Tests: merge precedence, collision handling, cache invalidation
 
 **15.2 — kind sources**
-- [ ] Tag discovery: query properties carrying the marker tag (verified working — see §15.2)
-- [ ] Marker tag name as a setting (default `semantic-connector`)
-- [ ] Explicit list setting + "add by name" in the popover
-- [ ] **Confirm the in-app path for tagging a property** before shipping; explicit list is the fallback
+- [x] Tag discovery: query properties carrying the marker tag (verified working — see §15.2)
+- [x] Marker tag name as a setting (default `semantic-connector`)
+- [x] Explicit list setting + "add by name" in the popover
+- [x] Confirmed tagging works: property entities accept extra tags (page-entity path); `rebuts` discovered live via the tag
 
 **15.4 — styling an open vocabulary**
-- [ ] Stable hash → palette slot for custom kinds; built-ins keep curated styles
-- [ ] Per-kind direction flip (default directed)
-- [ ] Surface style collisions past ~8 kinds rather than pretending they are distinct
-- [ ] Tests: hash stability when the kind list changes
+- [x] Stable hash → palette slot for custom kinds; built-ins keep curated styles
+- [x] Per-kind direction flip (default directed)
+- [x] Surface style collisions past ~8 kinds rather than pretending they are distinct
+- [x] Tests: hash stability when the kind list changes
 
 **15.5 — Relations popover + keybinding**
-- [ ] Toolbar button + popover: scope, connector visibility, labels, kind legend with swatches
-- [ ] Per-kind visibility toggles
-- [ ] `mod+shift+g` scope flip via `registerCommandPalette`
-- [ ] Popover writes through to persisted settings (no parallel state)
+- [x] Toolbar button + popover: scope, connector visibility, labels, kind legend with swatches
+- [x] Per-kind visibility toggles
+- [x] `mod+shift+g` scope flip via `registerCommandPalette`
+- [x] Popover writes through to persisted settings (no parallel state)
+- [x] Verified E2E: tag-discovered `rebuts` kind, popover controls, per-kind hide, scope flip from inside the canvas
 
-## Completed (unreleased)
+
 
 ### Feature: connector visibility + cross-graph scope (2026-08-25)
 Branch `feat/connector-visibility-and-scope`. Spec: `docs/feature-node-relationship-connectors.md` §14.
