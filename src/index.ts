@@ -8,7 +8,13 @@ import type {
   EdgeSpec,
   RelKind,
 } from "./types";
-import { registerSettings, getSettings, DOCK_WIDTH_MIN, DOCK_WIDTH_MAX } from "./settings";
+import {
+  registerSettings,
+  getSettings,
+  parseNameList,
+  DOCK_WIDTH_MIN,
+  DOCK_WIDTH_MAX,
+} from "./settings";
 import {
   fetchTree,
   fetchBlockTree,
@@ -23,7 +29,9 @@ import { buildEdgeElements, buildEdgeLabels } from "./views/edges";
 import { buildBadges, buildFocusHalo } from "./views/badges";
 import { edgeFocusArg } from "./views/visibility";
 import { selectGhosts, layoutGhosts, GHOST_CAP, type GhostNode } from "./views/ghosts";
-import { fetchRelationIdents, fetchIncomingRefs } from "./reverse-refs";
+import { fetchIncomingRefs } from "./reverse-refs";
+import { refreshRegistry, type PropertyEntry } from "./discovery";
+import { identToKind } from "./relations";
 import { render, hitTest } from "./renderer";
 import { createState, fitToView, zoomIn, zoomOut, attachHandlers } from "./controller";
 import { buildUI, STYLES, setActiveView, applyThemeToUI, updateDockButton, applyPlatformClass, updateFullscreenClass } from "./ui";
@@ -76,7 +84,13 @@ interface GhostState {
 }
 let ghostState: GhostState | null = null;
 let ghostRefreshInFlight = "";
-let relationIdents: Record<string, RelKind> | null = null;
+/**
+ * The vocabulary is derived from the graph (tagged properties) plus settings,
+ * so it is refreshed when either changes — keyed on a signature of the
+ * settings that feed it, and cleared outright on a graph switch.
+ */
+let registrySignature: string | null = null;
+let propertyCatalog: PropertyEntry[] = [];
 let isDocked = true; // default to docked mode
 
 /**
@@ -204,10 +218,7 @@ async function refreshGhosts(pruned: TreeNode, signature: string): Promise<void>
     const treeUuids = treeUuidSet(pruned);
     const outgoing = collectExternalRefs(pruned);
 
-    if (relationIdents === null) {
-      relationIdents = await fetchRelationIdents();
-    }
-    const incomingAll = await fetchIncomingRefs([...treeUuids], relationIdents);
+    const incomingAll = await fetchIncomingRefs([...treeUuids], identToKind());
     // A ref declared by a block already in the tree is not "incoming" — the
     // tree walk found it, and double-counting would inflate its badge.
     const incoming = incomingAll.filter((s) => !treeUuids.has(s.sourceUuid));
@@ -307,7 +318,27 @@ function setFocus(uuid: string | null): void {
   redraw();
 }
 
+/**
+ * Make sure the vocabulary matches the graph and settings before any tree is
+ * built — the adapter resolves property keys through the registry, so a stale
+ * registry means missing connectors. Cheap when nothing changed: one string
+ * comparison.
+ */
+async function ensureRegistry(): Promise<void> {
+  const s = getSettings();
+  const signature = [s.markerTag, s.customKinds, s.undirectedKinds].join("\u0000");
+  if (registrySignature === signature) return;
+
+  propertyCatalog = await refreshRegistry({
+    markerTag: s.markerTag,
+    explicit: parseNameList(s.customKinds),
+    undirected: parseNameList(s.undirectedKinds),
+  });
+  registrySignature = signature;
+}
+
 async function loadTree(blockUuid?: string): Promise<void> {
+  await ensureRegistry();
   const settings = getSettings();
   currentTree = blockUuid
     ? await fetchBlockTree(blockUuid, settings.showEmptyBlocks)
@@ -838,6 +869,7 @@ async function main(): Promise<void> {
       // Build tree from children — strip macro syntax from root label
       const rawContent = (block as Record<string, unknown>).content as string ?? "Outline";
       const rootLabel = rawContent.replace(/\{\{renderer\s[^}]*\}\}/g, "").replace(/\{\{[^}]*\}\}/g, "").trim() || "Outline";
+      await ensureRegistry();
       const tree = await buildTree(
         block.children as unknown as LogseqBlock[],
         rootLabel,
@@ -882,7 +914,8 @@ async function main(): Promise<void> {
   // Property idents are per-graph (they carry a graph-local suffix), so the
   // cache must not survive a graph switch.
   logseq.App.onCurrentGraphChanged(() => {
-    relationIdents = null;
+    registrySignature = null;
+    propertyCatalog = [];
     ghostState = null;
   });
 
@@ -891,6 +924,10 @@ async function main(): Promise<void> {
     if (!logseq.isMainUIVisible) return;
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
+      // A change may have tagged a property, which changes the vocabulary
+      // without changing any setting — so re-derive rather than trust the
+      // signature.
+      registrySignature = null;
       loadTree();
     }, 500);
   });
@@ -911,7 +948,16 @@ async function main(): Promise<void> {
         applyDockMode();
       }
     }
-    if (logseq.isMainUIVisible) {
+    if (!logseq.isMainUIVisible) return;
+
+    // Vocabulary settings change what the adapter matches, so the tree has to
+    // be rebuilt from source — a re-layout of the existing tree would keep the
+    // old refs.
+    const s = getSettings();
+    const nextKindSig = [s.markerTag, s.customKinds, s.undirectedKinds].join("\u0000");
+    if (nextKindSig !== registrySignature) {
+      loadTree();
+    } else {
       rebuildLayout();
     }
   });

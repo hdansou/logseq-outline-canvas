@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   resolveNodeRefs,
   buildTree,
@@ -7,6 +7,7 @@ import {
   collectExternalRefs,
   flattenDeep,
 } from "./adapter";
+import { setRegistry, buildRegistry, resetRegistry } from "./relations";
 import type { TreeNode } from "./types";
 
 const UUID_A = "11111111-1111-1111-1111-111111111111";
@@ -411,5 +412,59 @@ describe("filterRefsToSet", () => {
   it("filterIntraTreeRefs is the empty-allowance case", () => {
     const tree = node("A", [node("B", [], [{ kind: "part_of", targetUuid: "GHOST" }])]);
     expect(filterIntraTreeRefs(tree)).toEqual(filterRefsToSet(tree, new Set()));
+  });
+});
+
+describe("buildTree with user-defined kinds", () => {
+  const TGT = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+  const noResolve2 = vi.fn(async () => null);
+  afterEach(() => resetRegistry());
+
+  it("extracts a ref for a custom kind discovered from the graph", async () => {
+    setRegistry(buildRegistry({
+      tagged: [{ ident: ":user.property/rebuts-Qw12", title: "rebuts" }],
+      explicit: [],
+    }));
+    const blocks = [
+      {
+        uuid: "c",
+        title: "Block",
+        properties: { "user.property/rebuts-Qw12": { "block/uuid": TGT } },
+        children: [],
+      },
+    ];
+    const tree = await buildTree(blocks, "Page", false, vi.fn(async () => null), noResolve2);
+    expect(tree.refs).toEqual([{ kind: "rebuts", targetUuid: TGT }]);
+  });
+
+  it("still ignores a node property that is not a registered kind", async () => {
+    setRegistry(buildRegistry({
+      tagged: [{ ident: ":user.property/rebuts-Qw12", title: "rebuts" }],
+      explicit: [],
+    }));
+    const blocks = [
+      {
+        uuid: "c",
+        title: "Block",
+        properties: { "user.property/author-Zz99": { "block/uuid": TGT } },
+        children: [],
+      },
+    ];
+    const tree = await buildTree(blocks, "Page", false, vi.fn(async () => null), noResolve2);
+    expect(tree.refs ?? []).toEqual([]);
+  });
+
+  it("falls back to the built-in name shape when discovery has not run", async () => {
+    resetRegistry(); // no idents known
+    const blocks = [
+      {
+        uuid: "c",
+        title: "Block",
+        properties: { "user.property/supports-K9PFNDJ8": { "block/uuid": TGT } },
+        children: [],
+      },
+    ];
+    const tree = await buildTree(blocks, "Page", false, vi.fn(async () => null), noResolve2);
+    expect(tree.refs).toEqual([{ kind: "supports", targetUuid: TGT }]);
   });
 });

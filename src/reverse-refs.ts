@@ -1,6 +1,5 @@
 /// <reference types="@logseq/libs" />
 import type { EdgeSpec, RelKind } from "./types";
-import { REL_KINDS } from "./relations";
 
 /**
  * Incoming relationships are invisible to the adapter: it discovers refs by
@@ -26,21 +25,7 @@ function asEntity(value: unknown): PulledEntity | null {
   return value && typeof value === "object" ? (value as PulledEntity) : null;
 }
 
-const KIND_SET = new Set<string>(REL_KINDS);
 
-/**
- * Build ident → kind from pulled property entities, keyed by the property's
- * title. Matching on title (not ident) is what makes this suffix-agnostic.
- */
-export function identsByKind(rows: unknown[] | undefined): Record<string, RelKind> {
-  const out: Record<string, RelKind> = {};
-  for (const row of rows ?? []) {
-    const entity = asEntity(Array.isArray(row) ? row[0] : row);
-    if (!entity?.ident || !entity.title) continue;
-    if (KIND_SET.has(entity.title)) out[entity.ident] = entity.title as RelKind;
-  }
-  return out;
-}
 
 /**
  * Turn `[referring-block, property-ident, referenced-block]` rows into edge
@@ -71,23 +56,6 @@ export function specsFromQueryRows(
   }
 
   return out;
-}
-
-/** Resolve the graph's relationship property idents. One query per build. */
-export async function fetchRelationIdents(): Promise<Record<string, RelKind>> {
-  try {
-    const rows = await logseq.DB.datascriptQuery<unknown[]>(
-      `[:find (pull ?p [:db/ident :block/title])
-        :where
-        [?p :block/tags :logseq.class/Property]
-        [?p :db/ident ?i]
-        [(str ?i) ?s]
-        [(clojure.string/starts-with? ?s ":user.property/")]]`
-    );
-    return identsByKind(rows);
-  } catch {
-    return {};
-  }
 }
 
 /**

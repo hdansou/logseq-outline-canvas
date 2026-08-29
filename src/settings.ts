@@ -17,6 +17,12 @@ export interface PluginSettings {
   showRelationshipLabels: boolean;
   edgeVisibility: EdgeVisibility;
   relationshipScope: RelationshipScope;
+  /** Tag that marks a property as a relationship kind. */
+  markerTag: string;
+  /** Comma-separated extra kind names, for properties not (yet) tagged. */
+  customKinds: string;
+  /** Comma-separated kinds to draw without an arrowhead. */
+  undirectedKinds: string;
   dockBehavior: DockBehavior;
   dockWidth: number;
 }
@@ -34,6 +40,9 @@ export const DEFAULTS: PluginSettings = {
   showRelationshipLabels: false,
   edgeVisibility: "lazy",
   relationshipScope: "page",
+  markerTag: "semantic-connector",
+  customKinds: "",
+  undirectedKinds: "",
   dockBehavior: "mirror",
   dockWidth: 40,
 };
@@ -127,6 +136,30 @@ export function registerSettings(): void {
         "Page: only draw connectors when both blocks are in the diagram (default). Graph: also draw connectors to and from blocks on other pages, shown as dashed 'ghost' nodes in a gutter on the right. Click a ghost to jump to that block.",
     },
     {
+      key: "markerTag",
+      type: "string",
+      default: DEFAULTS.markerTag,
+      title: "Relationship Marker Tag",
+      description:
+        "Tag a property with this to turn it into a relationship kind on the canvas. Add the tag from the property's own page. The five built-in kinds (relates_to, depends_on, supports, contradicts, part_of) work without it.",
+    },
+    {
+      key: "customKinds",
+      type: "string",
+      default: DEFAULTS.customKinds,
+      title: "Extra Relationship Kinds",
+      description:
+        "Comma-separated property names to draw as connectors, for properties you haven't tagged (or haven't created yet). Example: rebuts, cites, owns.",
+    },
+    {
+      key: "undirectedKinds",
+      type: "string",
+      default: DEFAULTS.undirectedKinds,
+      title: "Undirected Kinds",
+      description:
+        "Comma-separated kinds to draw without an arrowhead, for symmetric relationships. Custom kinds are directed by default.",
+    },
+    {
       key: "dockBehavior",
       type: "enum",
       enumChoices: ["mirror", "overlay"],
@@ -144,6 +177,14 @@ export function registerSettings(): void {
       description: `Width of the docked canvas as a percentage of the viewport (${DOCK_WIDTH_MIN}–${DOCK_WIDTH_MAX}). Drag the left edge of the canvas to adjust live; this number is the persisted value.`,
     },
   ]);
+}
+
+/** Split a comma-separated setting into trimmed, non-empty names. */
+export function parseNameList(value: string): string[] {
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
 export function getSettings(): PluginSettings {
@@ -170,6 +211,12 @@ export function getSettings(): PluginSettings {
     relationshipScope:
       (logseq.settings?.relationshipScope as RelationshipScope) ??
       DEFAULTS.relationshipScope,
+    markerTag:
+      (logseq.settings?.markerTag as string) ?? DEFAULTS.markerTag,
+    customKinds:
+      (logseq.settings?.customKinds as string) ?? DEFAULTS.customKinds,
+    undirectedKinds:
+      (logseq.settings?.undirectedKinds as string) ?? DEFAULTS.undirectedKinds,
     dockBehavior:
       (logseq.settings?.dockBehavior as DockBehavior) ?? DEFAULTS.dockBehavior,
     dockWidth: Math.max(

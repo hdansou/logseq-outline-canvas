@@ -3,12 +3,20 @@
  * driven by a user-created Logseq DB property of type `:node` with a matching
  * ident. Line style lives in `relations.ts`, color in the theme's `rel` map.
  */
-export type RelKind =
+export type BuiltinKind =
   | "relates_to"
   | "depends_on"
   | "supports"
   | "contradicts"
   | "part_of";
+
+/**
+ * A relationship kind. Open, not a closed union: the five built-ins are
+ * always available, and users add their own by tagging a property with the
+ * marker tag or naming it explicitly. Styles resolve through the registry in
+ * `relations.ts` rather than a compile-time record.
+ */
+export type RelKind = BuiltinKind | (string & {});
 
 /** An outgoing relationship edge declared on a block */
 export interface NodeRef {

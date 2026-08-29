@@ -1,4 +1,4 @@
-import type { RelKind } from "./types";
+import type { BuiltinKind } from "./types";
 
 /** Deuteranopia-safe color palette — 8 colors with unique dash patterns */
 export interface BranchColor {
@@ -52,8 +52,8 @@ export interface Theme {
   accentText: string;
   /** Spine dot inner fill */
   spineDotInner: string;
-  /** Connector overlay: line color per relationship kind */
-  rel: Record<RelKind, string>;
+  /** Connector overlay: curated line color per built-in relationship kind */
+  rel: Record<BuiltinKind, string>;
   /** Outgoing-count badge fill */
   badgeOut: string;
   /** Incoming-count badge fill */
@@ -157,6 +157,17 @@ export function theme(): Theme {
 /** Switch between light and dark themes */
 export function setTheme(mode: "light" | "dark"): void {
   activeTheme = mode === "light" ? LIGHT_THEME : DARK_THEME;
+}
+
+/**
+ * Colors available to user-defined relationship kinds, indexed by palette
+ * slot. Drawn from the branch strokes so custom connectors sit in the same
+ * visual family as the tree, while their unique dash patterns (STYLE_SLOTS)
+ * carry the distinction for colorblind and grayscale readers.
+ */
+export function relSlotColor(index: number): string {
+  const cols = activeTheme.colors;
+  return cols[index % cols.length].stroke;
 }
 
 /** Get color for a branch index from the active theme */

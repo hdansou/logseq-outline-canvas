@@ -1,27 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { identsByKind, specsFromQueryRows } from "./reverse-refs";
-
-describe("identsByKind", () => {
-  it("maps a property ident to its relationship kind by title", () => {
-    const rows = [
-      [{ ident: ":user.property/supports-rsddWi2L", title: "supports" }],
-      [{ ident: ":user.property/part_of-D6EArJR-", title: "part_of" }],
-    ];
-    expect(identsByKind(rows)).toEqual({
-      ":user.property/supports-rsddWi2L": "supports",
-      ":user.property/part_of-D6EArJR-": "part_of",
-    });
-  });
-
-  it("ignores properties whose title is not a relationship kind", () => {
-    const rows = [[{ ident: ":user.property/status-AB", title: "status" }]];
-    expect(identsByKind(rows)).toEqual({});
-  });
-
-  it("tolerates malformed rows", () => {
-    expect(identsByKind([[], [null], [{ title: "supports" }], undefined])).toEqual({});
-  });
-});
+import { specsFromQueryRows } from "./reverse-refs";
 
 describe("specsFromQueryRows", () => {
   const idents = { ":user.property/supports-X": "supports" as const };

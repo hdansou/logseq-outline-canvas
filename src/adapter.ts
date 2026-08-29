@@ -1,5 +1,5 @@
 import type { TreeNode, NodeRef, RelKind, EdgeSpec } from "./types";
-import { REL_KIND_ALTERNATION } from "./relations";
+import { BUILTIN_KINDS, identToKind } from "./relations";
 
 // Block shape from @logseq/libs. Properties in DB graphs can surface as
 // namespaced top-level keys (e.g. `user.property/foo-XYZ`) AND/OR inside a
@@ -26,16 +26,35 @@ const REF_RE = /\[\[([^\[\]]+)\]\]/g;
 const MAX_REF_DEPTH = 3;
 
 /**
- * Match property keys of the form `user.property/<kind>-<suffix>` for any kind
- * in the relationship registry (relates_to, depends_on, supports, contradicts,
- * part_of). Leading colon (namespaced-keyword form) tolerated. Suffix part is
- * optional (matches a built-in ident too, should Logseq ever ship one). Match
- * on ident is rename-stable; if a user renames the property after creation the
- * connector keeps drawing — acceptable v1.
+ * Fallback matcher for the five built-in kinds: `user.property/<kind>-<suffix>`,
+ * leading colon tolerated. Used only when the ident map has no entry — the map
+ * is the primary path, but discovery is async and can fail, and a failed query
+ * must not make existing connectors vanish.
+ *
+ * Alternation is longest-first so a kind can never be shadowed by another that
+ * is its prefix.
  */
-const REL_KEY_RE = new RegExp(
-  `^:?user\\.property\\/(${REL_KIND_ALTERNATION})(?:-[A-Za-z0-9_-]+)?$`
+const BUILTIN_KEY_RE = new RegExp(
+  `^:?user\\.property\\/(${[...BUILTIN_KINDS].sort((a, b) => b.length - a.length).join("|")})(?:-[A-Za-z0-9_-]+)?$`
 );
+
+/**
+ * Resolve a property key to a relationship kind.
+ *
+ * The ident map (built from the graph's own properties — those carrying the
+ * marker tag plus those named after a registered kind) is authoritative: it
+ * covers user-defined vocabulary and is rename-stable, because idents survive
+ * renames while names do not. The built-in regex is the safety net.
+ */
+function relationKindForKey(key: string): RelKind | null {
+  const map = identToKind();
+  const bare = key.startsWith(":") ? key.slice(1) : key;
+  const hit = map[key] ?? map[`:${bare}`] ?? map[bare];
+  if (hit) return hit;
+
+  const m = BUILTIN_KEY_RE.exec(key);
+  return m ? (m[1] as RelKind) : null;
+}
 
 /**
  * Replace `[[uuid]]` node references inside text with the referenced entity's
@@ -142,9 +161,9 @@ async function extractRefUuids(
 
 /**
  * Walk a block's property surface and emit a NodeRef for every value attached
- * to a `relates_to` / `depends_on` property. Checks both top-level namespaced
- * keys (DB-graph style) and the `.properties` sub-object (legacy / fallback).
- * Dedupes if a key appears in both places.
+ * to a relationship property. Checks both top-level namespaced keys (DB-graph
+ * style) and the `.properties` sub-object (legacy / fallback). Dedupes if a
+ * key appears in both places.
  */
 async function extractRefs(
   block: LogseqBlock,
@@ -155,9 +174,8 @@ async function extractRefs(
   const seen = new Set<string>(); // `${kind}|${uuid}` dedup
 
   const addFrom = async (key: string, value: unknown): Promise<void> => {
-    const m = REL_KEY_RE.exec(key);
-    if (!m) return;
-    const kind = m[1] as RelKind;
+    const kind = relationKindForKey(key);
+    if (!kind) return;
     for (const targetUuid of await extractRefUuids(value, idCache, idResolver)) {
       const sig = `${kind}|${targetUuid}`;
       if (seen.has(sig)) continue;

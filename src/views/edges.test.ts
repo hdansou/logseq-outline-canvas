@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { TreeNode, Rect, CurveElement, TextElement } from "../types";
 import { buildEdgeElements, buildEdgeLabels } from "./edges";
-import { REL_KINDS } from "../relations";
+import { BUILTIN_KINDS } from "../relations";
 
 const node = (uuid: string, children: TreeNode[] = [], refs?: TreeNode["refs"]): TreeNode => ({
   name: uuid, uuid, depth: 0, id: 0, children, refs,
@@ -77,11 +77,11 @@ describe("buildEdgeElements", () => {
       ["A", { x: 0, y: 0, w: 100, h: 40 }],
       ["B", { x: 200, y: 0, w: 100, h: 40 }],
     ]);
-    const signatures = REL_KINDS.map((kind) => {
+    const signatures = BUILTIN_KINDS.map((kind) => {
       const c = curveEls(buildEdgeElements(node("A", [], [{ kind, targetUuid: "B" }]), rects))[0];
       return `${(c.dash ?? []).join(",")}|${c.arrowEnd ? "arrow" : ""}`;
     });
-    expect(new Set(signatures).size).toBe(REL_KINDS.length);
+    expect(new Set(signatures).size).toBe(BUILTIN_KINDS.length);
   });
 
   it("horizontally-separated targets anchor on right/left faces", () => {
