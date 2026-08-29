@@ -469,6 +469,25 @@ export function filterIntraTreeRefs(root: TreeNode): TreeNode {
 }
 
 /**
+ * Drop refs whose kind the user has switched off in the Relations popover.
+ * Filtering here rather than in the edge builders keeps every downstream
+ * consumer — edges, labels, badges — consistent without a hidden-kind
+ * parameter threaded through each of them.
+ */
+export function filterRefsByKind(root: TreeNode, hidden: Set<string>): TreeNode {
+  if (hidden.size === 0) return root;
+
+  return (function walk(n: TreeNode): TreeNode {
+    const refs = n.refs?.filter((r) => !hidden.has(r.kind));
+    return {
+      ...n,
+      children: n.children.map(walk),
+      refs: refs && refs.length ? refs : [],
+    };
+  })(root);
+}
+
+/**
  * Refs that point outside the rendered tree, paired with the uuid of the
  * block that declares them. These are the candidates for ghost nodes under
  * `relationshipScope: "graph"`; under `"page"` they are simply dropped.

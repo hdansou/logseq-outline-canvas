@@ -23,6 +23,8 @@ export interface PluginSettings {
   customKinds: string;
   /** Comma-separated kinds to draw without an arrowhead. */
   undirectedKinds: string;
+  /** Comma-separated kinds switched off in the Relations popover. */
+  hiddenKinds: string;
   dockBehavior: DockBehavior;
   dockWidth: number;
 }
@@ -43,6 +45,7 @@ export const DEFAULTS: PluginSettings = {
   markerTag: "semantic-connector",
   customKinds: "",
   undirectedKinds: "",
+  hiddenKinds: "",
   dockBehavior: "mirror",
   dockWidth: 40,
 };
@@ -217,6 +220,8 @@ export function getSettings(): PluginSettings {
       (logseq.settings?.customKinds as string) ?? DEFAULTS.customKinds,
     undirectedKinds:
       (logseq.settings?.undirectedKinds as string) ?? DEFAULTS.undirectedKinds,
+    hiddenKinds:
+      (logseq.settings?.hiddenKinds as string) ?? DEFAULTS.hiddenKinds,
     dockBehavior:
       (logseq.settings?.dockBehavior as DockBehavior) ?? DEFAULTS.dockBehavior,
     dockWidth: Math.max(

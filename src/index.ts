@@ -21,6 +21,7 @@ import {
   flattenDeep,
   buildTree,
   filterRefsToSet,
+  filterRefsByKind,
   collectExternalRefs,
   defaultFetcher,
 } from "./adapter";
@@ -31,10 +32,20 @@ import { edgeFocusArg } from "./views/visibility";
 import { selectGhosts, layoutGhosts, GHOST_CAP, type GhostNode } from "./views/ghosts";
 import { fetchIncomingRefs } from "./reverse-refs";
 import { refreshRegistry, type PropertyEntry } from "./discovery";
-import { identToKind } from "./relations";
+import { identToKind, registryKinds, relColor, relStyle } from "./relations";
 import { render, hitTest } from "./renderer";
 import { createState, fitToView, zoomIn, zoomOut, attachHandlers } from "./controller";
-import { buildUI, STYLES, setActiveView, applyThemeToUI, updateDockButton, applyPlatformClass, updateFullscreenClass } from "./ui";
+import {
+  buildUI,
+  STYLES,
+  setActiveView,
+  applyThemeToUI,
+  updateDockButton,
+  applyPlatformClass,
+  updateFullscreenClass,
+  renderRelationsPopover,
+  type KindRow,
+} from "./ui";
 import { setTheme } from "./colors";
 import { renderToDataURL, exportCurrentViewAsDataURL } from "./offscreen";
 import { layoutTreeChart } from "./views/tree-chart";
@@ -161,8 +172,9 @@ function composeElements(): void {
 
   // Edges whose source is off-page: no tree node declares them, so they ride
   // alongside the tree refs rather than inside them.
+  const hidden = new Set(parseNameList(settings.hiddenKinds));
   const ghostSpecs = settings.relationshipScope === "graph" && ghostState
-    ? ghostState.incoming
+    ? ghostState.incoming.filter((spec) => !hidden.has(spec.kind))
     : [];
 
   const overlay = wantOverlay
@@ -276,7 +288,10 @@ function rebuildLayout(): void {
   // Refs to a ghost we chose to draw survive the filter; refs past the cap
   // are still dropped, so we never draw an edge into empty space.
   const allowed = new Set(ghosts?.nodes.map((n) => n.uuid) ?? []);
-  const tree = settings.showRelationships ? filterRefsToSet(pruned, allowed) : pruned;
+  const hiddenKinds = new Set(parseNameList(settings.hiddenKinds));
+  const tree = settings.showRelationships
+    ? filterRefsByKind(filterRefsToSet(pruned, allowed), hiddenKinds)
+    : pruned;
   const view = VIEWS.find((v) => v.id === activeView)!;
   let result = view.layout(tree, settings.maxDepth);
 
@@ -622,6 +637,123 @@ function setupCanvas(): void {
     }
   });
 
+  // --- Relations popover -------------------------------------------------
+
+  const popover = document.getElementById("oc-relations-pop");
+
+  /**
+   * Persist one relationship setting and re-render. The popover is a faster
+   * surface onto the same settings the plugin panel writes, not a parallel
+   * store, so a change made here survives a reload identically.
+   */
+  const applyRelationSetting = (patch: Record<string, unknown>): void => {
+    logseq.updateSettings(patch);
+    if (popover && !popover.hidden) renderPopover();
+  };
+
+  const renderPopover = (): void => {
+    if (!popover) return;
+    const s = getSettings();
+    const hidden = new Set(parseNameList(s.hiddenKinds));
+
+    // Two kinds "collide" when they'd draw the same color and dash — possible
+    // once the custom vocabulary outgrows the palette. Saying so beats
+    // implying every kind is distinguishable.
+    const seenStyles = new Map<string, number>();
+    for (const def of registryKinds()) {
+      const sig = `${relColor(def.kind)}|${(relStyle(def.kind).dash ?? []).join(",")}`;
+      seenStyles.set(sig, (seenStyles.get(sig) ?? 0) + 1);
+    }
+
+    const kinds: KindRow[] = registryKinds().map((def) => {
+      const style = relStyle(def.kind);
+      const color = relColor(def.kind);
+      const sig = `${color}|${(style.dash ?? []).join(",")}`;
+      return {
+        kind: def.kind,
+        color,
+        dash: style.dash ?? [],
+        directed: !!style.arrowEnd,
+        source: def.source,
+        hidden: hidden.has(def.kind),
+        collides: (seenStyles.get(sig) ?? 0) > 1,
+      };
+    });
+
+    const known = new Set(kinds.map((k) => k.kind));
+    popover.innerHTML = renderRelationsPopover({
+      scope: s.relationshipScope,
+      visibility: s.edgeVisibility,
+      labels: s.showRelationshipLabels,
+      markerTag: s.markerTag,
+      kinds,
+      candidates: propertyCatalog
+        .map((prop) => prop.title)
+        .filter((title) => !known.has(title)),
+    });
+  };
+
+  const togglePopover = (force?: boolean): void => {
+    if (!popover) return;
+    const next = force ?? popover.hidden;
+    if (next) renderPopover();
+    popover.hidden = !next;
+  };
+
+  const addKindByName = (): void => {
+    const input = document.getElementById("oc-pop-add-input") as HTMLInputElement | null;
+    const name = input?.value.trim();
+    if (!name) return;
+    const existing = parseNameList(getSettings().customKinds);
+    if (!existing.includes(name)) {
+      applyRelationSetting({ customKinds: [...existing, name].join(", ") });
+    }
+    if (input) input.value = "";
+  };
+
+  // Popover controls. Kept off the main delegated handler because these are
+  // inputs and segmented buttons rather than plain toolbar actions.
+  popover?.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement | null)?.closest("button") as HTMLButtonElement | null;
+    if (!btn) return;
+    const scope = btn.getAttribute("data-scope");
+    if (scope) return applyRelationSetting({ relationshipScope: scope });
+    const vis = btn.getAttribute("data-vis");
+    if (vis) return applyRelationSetting({ edgeVisibility: vis });
+    if (btn.id === "oc-pop-add-btn") addKindByName();
+  });
+
+  popover?.addEventListener("change", (e) => {
+    const input = e.target as HTMLInputElement | null;
+    if (!input) return;
+    if (input.id === "oc-pop-labels") {
+      return applyRelationSetting({ showRelationshipLabels: input.checked });
+    }
+    const kind = input.getAttribute("data-kind");
+    if (kind) {
+      const hidden = new Set(parseNameList(getSettings().hiddenKinds));
+      if (input.checked) hidden.delete(kind);
+      else hidden.add(kind);
+      applyRelationSetting({ hiddenKinds: [...hidden].join(", ") });
+    }
+  });
+
+  popover?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.target as HTMLElement).id === "oc-pop-add-input") {
+      e.preventDefault();
+      addKindByName();
+    }
+  });
+
+  // Click anywhere else closes it — including on the canvas, where a click
+  // also changes focus and would otherwise leave a stale panel floating.
+  document.addEventListener("click", (e) => {
+    if (!popover || popover.hidden) return;
+    const target = e.target as HTMLElement | null;
+    if (popover.contains(target) || target?.closest("#oc-relations")) return;
+    popover.hidden = true;
+  });
+
   // Delegated click handler on #app in capture phase. Covers both the
   // toolbar controls (by id) and the view switcher buttons (by class).
   const app = document.getElementById("app");
@@ -649,6 +781,7 @@ function setupCanvas(): void {
         break;
       }
       case "oc-fit": rebuildLayout(); break;
+      case "oc-relations": togglePopover(); break;
       case "oc-export": exportCurrentView(); break;
       case "oc-copy": copyCurrentView(); break;
     }
@@ -789,6 +922,30 @@ async function main(): Promise<void> {
       }
     },
   });
+
+  // Scope flip — the one relationship control used often enough to deserve a
+  // key. Writes the same setting the popover does.
+  logseq.App.registerCommandPalette(
+    {
+      key: "outline-canvas-toggle-scope",
+      label: "OutlineCanvas: Toggle relationship scope (page / graph)",
+      keybinding: {
+        mode: "global",
+        binding: "mod+shift+g",
+      },
+    },
+    async () => {
+      const next = getSettings().relationshipScope === "graph" ? "page" : "graph";
+      logseq.updateSettings({ relationshipScope: next });
+      logseq.UI.showMsg(
+        next === "graph"
+          ? "OutlineCanvas: showing relationships across the graph"
+          : "OutlineCanvas: showing relationships on this page only",
+        "success",
+        { timeout: 2000 }
+      );
+    }
+  );
 
   // Toolbar button
   logseq.App.registerUIItem("toolbar", {

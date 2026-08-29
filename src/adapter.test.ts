@@ -4,6 +4,7 @@ import {
   buildTree,
   filterIntraTreeRefs,
   filterRefsToSet,
+  filterRefsByKind,
   collectExternalRefs,
   flattenDeep,
 } from "./adapter";
@@ -466,5 +467,34 @@ describe("buildTree with user-defined kinds", () => {
     ];
     const tree = await buildTree(blocks, "Page", false, vi.fn(async () => null), noResolve2);
     expect(tree.refs).toEqual([{ kind: "supports", targetUuid: TGT }]);
+  });
+});
+
+describe("filterRefsByKind", () => {
+  const node = (uuid: string, children: TreeNode[] = [], refs?: TreeNode["refs"]): TreeNode => ({
+    name: uuid, uuid, depth: 0, id: 0, children, refs,
+  });
+
+  it("drops refs of hidden kinds", () => {
+    const tree = node("A", [
+      node("B", [], [
+        { kind: "supports", targetUuid: "C" },
+        { kind: "contradicts", targetUuid: "C" },
+      ]),
+    ]);
+    const out = filterRefsByKind(tree, new Set(["contradicts"]));
+    expect(out.children[0].refs).toEqual([{ kind: "supports", targetUuid: "C" }]);
+  });
+
+  it("returns the tree untouched when nothing is hidden", () => {
+    const tree = node("A", [node("B", [], [{ kind: "supports", targetUuid: "C" }])]);
+    expect(filterRefsByKind(tree, new Set())).toEqual(tree);
+  });
+
+  it("does not mutate the input tree", () => {
+    const refs = [{ kind: "supports" as const, targetUuid: "C" }];
+    const tree = node("A", [node("B", [], refs)]);
+    filterRefsByKind(tree, new Set(["supports"]));
+    expect(refs).toHaveLength(1);
   });
 });
