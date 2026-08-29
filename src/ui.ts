@@ -19,6 +19,8 @@ export interface KindRow {
   directed: boolean;
   source: "builtin" | "tag" | "explicit";
   hidden: boolean;
+  /** A property with this name exists in the graph. */
+  present: boolean;
   /** True when another kind draws the same color+dash pair. */
   collides: boolean;
 }
@@ -78,15 +80,34 @@ function segmented(name: string, current: string, options: [string, string][]): 
  */
 export function renderRelationsPopover(state: RelationsState): string {
   const kindRows = state.kinds
-    .map(
-      (row) => `
-      <label class="oc-kind${row.hidden ? " oc-kind--off" : ""}">
-        <input type="checkbox" data-kind="${esc(row.kind)}"${row.hidden ? "" : " checked"}>
-        ${swatch(row)}
-        <span class="oc-kind-name">${esc(row.kind)}</span>
-        <span class="oc-kind-src">${SOURCE_LABEL[row.source]}</span>
-      </label>`
-    )
+    .map((row) => {
+      // A kind whose property doesn't exist yet draws nothing. Say so, or a
+      // typo is indistinguishable from a working kind.
+      const status = row.present
+        ? `<span class="oc-kind-src">${SOURCE_LABEL[row.source]}</span>`
+        : `<span class="oc-kind-src oc-kind-src--missing" title="No property with this name exists in the graph yet, so nothing is drawn. Create it and connectors appear automatically.">not in graph</span>`;
+      // Only user-added kinds can be removed here. Built-ins are permanent
+      // (hide them instead), and a tagged kind is removed by untagging its
+      // property — the graph is the source of truth for those.
+      const remove =
+        row.source === "explicit"
+          ? `<button class="oc-kind-x" data-remove-kind="${esc(row.kind)}" title="Remove ${esc(row.kind)} from the list">×</button>`
+          : `<span class="oc-kind-x oc-kind-x--none" title="${
+              row.source === "tag"
+                ? "Discovered from the graph — remove the marker tag from the property to drop it"
+                : "Built-in kind — uncheck to hide it"
+            }"></span>`;
+      return `
+      <div class="oc-kind${row.hidden ? " oc-kind--off" : ""}">
+        <label class="oc-kind-main">
+          <input type="checkbox" data-kind="${esc(row.kind)}"${row.hidden ? "" : " checked"}>
+          ${swatch(row)}
+          <span class="oc-kind-name">${esc(row.kind)}</span>
+        </label>
+        ${status}
+        ${remove}
+      </div>`;
+    })
     .join("");
 
   const collisions = state.kinds.filter((k) => k.collides).length;
@@ -463,9 +484,29 @@ html, body, #app {
 
 .oc-kind:hover { background: var(--oc-surface); }
 .oc-kind--off { opacity: 0.45; }
-.oc-kind-name { flex: 1; color: var(--oc-text); }
-.oc-kind-src { color: var(--oc-text-muted); font-size: 10px; }
+.oc-kind-main { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; cursor: pointer; }
+.oc-kind-name { color: var(--oc-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oc-kind-src { color: var(--oc-text-muted); font-size: 10px; white-space: nowrap; }
+.oc-kind-src--missing { color: #d6812b; }
 .oc-swatch { flex: none; }
+
+.oc-kind-x {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--oc-text-muted);
+  font-family: var(--oc-font);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.oc-kind-x:hover { background: var(--oc-border); color: var(--oc-text); }
+.oc-kind-x--none { cursor: default; }
 
 .oc-pop-note {
   margin: 8px 0 0;

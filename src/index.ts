@@ -102,6 +102,12 @@ let ghostRefreshInFlight = "";
  */
 let registrySignature: string | null = null;
 let propertyCatalog: PropertyEntry[] = [];
+/**
+ * Set by the popover wiring. The registry is rebuilt asynchronously, so a
+ * settings change that adds a kind can't render the new list synchronously —
+ * the popover has to be told once the refresh lands.
+ */
+let popoverRefresh: (() => void) | null = null;
 let isDocked = true; // default to docked mode
 
 /**
@@ -350,6 +356,7 @@ async function ensureRegistry(): Promise<void> {
     undirected: parseNameList(s.undirectedKinds),
   });
   registrySignature = signature;
+  popoverRefresh?.();
 }
 
 async function loadTree(blockUuid?: string): Promise<void> {
@@ -692,6 +699,9 @@ function setupCanvas(): void {
         directed: !!style.arrowEnd,
         source: def.source,
         hidden: hidden.has(def.kind),
+        // No ident means no property in the graph carries this name, so the
+        // adapter can never match it.
+        present: !!def.ident,
         collides: (seenStyles.get(sig) ?? 0) > 1,
       };
     });
@@ -707,6 +717,10 @@ function setupCanvas(): void {
         .map((prop) => prop.title)
         .filter((title) => !known.has(title)),
     });
+  };
+
+  popoverRefresh = (): void => {
+    if (popover && !popover.hidden) renderPopover();
   };
 
   const togglePopover = (force?: boolean): void => {
@@ -739,6 +753,22 @@ function setupCanvas(): void {
     if (input) input.value = "";
   };
 
+  /**
+   * Drop a user-added kind. Also clears it from the hidden and undirected
+   * lists so removing and re-adding a name doesn't resurrect settings the
+   * user set on a kind that no longer exists.
+   */
+  const removeKindByName = (name: string): void => {
+    const s = getSettings();
+    const without = (value: string): string =>
+      parseNameList(value).filter((k) => k !== name).join(", ");
+    applyRelationSetting({
+      customKinds: without(s.customKinds),
+      hiddenKinds: without(s.hiddenKinds),
+      undirectedKinds: without(s.undirectedKinds),
+    });
+  };
+
   // Popover controls. Kept off the main delegated handler because these are
   // inputs and segmented buttons rather than plain toolbar actions.
   popover?.addEventListener("click", (e) => {
@@ -748,6 +778,8 @@ function setupCanvas(): void {
     if (scope) return applyRelationSetting({ relationshipScope: scope });
     const vis = btn.getAttribute("data-vis");
     if (vis) return applyRelationSetting({ edgeVisibility: vis });
+    const remove = btn.getAttribute("data-remove-kind");
+    if (remove) return removeKindByName(remove);
     if (btn.id === "oc-pop-add-btn") addKindByName();
   });
 
