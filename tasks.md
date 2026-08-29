@@ -1,6 +1,6 @@
 # OutlineCanvas — Task Tracker
 
-**Last Updated:** 2026-08-25
+**Last Updated:** 2026-08-29
 
 ## Production-hardening pass (2026-05-16)
 
@@ -9,6 +9,35 @@ Ran `/production-readiness` after the dock-mode rework. Baseline clean: 64 tests
 **Applied:** C1 (CHANGELOG `[Unreleased]` section describing `dockBehavior`, `dockWidth`, drag handle), C2 (README docked-mode section rewritten to match the new behavior).
 
 **Deferred:** B1 — decompose `src/index.ts` (778 lines) into `dock-mode.ts` / `macro-renderer.ts` / `event-wiring.ts`. Not urgent; pick up in a focused session.
+
+## Scoped, not started
+
+### Feature: user-defined kinds + Relations popover (2026-08-29)
+Spec: `docs/feature-node-relationship-connectors.md` §15. Sequenced so the registry lands before the surface that exposes it.
+
+**15.3 — registry plumbing (the bulk of the work)**
+- [ ] `identToKind` map replaces `REL_KEY_RE`; thread it into `buildTree` (async dependency, one cached query per graph)
+- [ ] Share + invalidate the cache with `reverse-refs.ts` (already resets on `onCurrentGraphChanged`)
+- [ ] `RelKind` stops being a closed union: built-ins as named constants, custom kinds as registry-resolved strings
+- [ ] Tests: merge precedence, collision handling, cache invalidation
+
+**15.2 — kind sources**
+- [ ] Tag discovery: query properties carrying the marker tag (verified working — see §15.2)
+- [ ] Marker tag name as a setting (default `semantic-connector`)
+- [ ] Explicit list setting + "add by name" in the popover
+- [ ] **Confirm the in-app path for tagging a property** before shipping; explicit list is the fallback
+
+**15.4 — styling an open vocabulary**
+- [ ] Stable hash → palette slot for custom kinds; built-ins keep curated styles
+- [ ] Per-kind direction flip (default directed)
+- [ ] Surface style collisions past ~8 kinds rather than pretending they are distinct
+- [ ] Tests: hash stability when the kind list changes
+
+**15.5 — Relations popover + keybinding**
+- [ ] Toolbar button + popover: scope, connector visibility, labels, kind legend with swatches
+- [ ] Per-kind visibility toggles
+- [ ] `mod+shift+g` scope flip via `registerCommandPalette`
+- [ ] Popover writes through to persisted settings (no parallel state)
 
 ## Completed (unreleased)
 

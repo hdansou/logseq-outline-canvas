@@ -5,6 +5,8 @@
 **Status:** Implemented (v1.1.0; kind set extended in v1.3.0)
 **Initial Scope:** May 15, 2026
 
+**v1.4 scope (Aug 29, 2026, not yet built):** relationship kinds become user-definable, and the controls move out of plugin settings into a Relations popover on the canvas toolbar. See §15.
+
 **v1.3 revision (Aug 25, 2026):** two follow-ups driven by live use — connectors can now stay drawn at rest (`edgeVisibility`) and can reach targets outside the rendered page (`relationshipScope`). See §14.
 
 **v1.2 revision (Aug 24, 2026):** the recognised relationship set grows from two kinds to five — `supports`, `contradicts` and `part_of` join `relates_to` and `depends_on`. Kinds are now declared once in `src/relations.ts` (line style) plus the theme's `rel` color map; nothing else in the pipeline is kind-aware.
@@ -345,3 +347,68 @@ One query per build, not one per node.
 ### 14.3 Authoring is still out of scope
 
 Worth recording, since it constrains any future "draw an edge on the canvas" feature: plugins may *assign* values to existing user properties, but Logseq rejects creating them — `upsertProperty(":user.property/...")` fails with *"Plugins can only upsert its own properties"*, and properties a plugin creates land under `:plugin.property.<pid>/...`, which the adapter deliberately does not match. Any authoring UI would depend on the user having created the five properties by hand first.
+
+## 15. User-Defined Kinds & Relations Popover (v1.4 — scoped, not built)
+
+### 15.1 Why
+
+The five built-in kinds are a guess at what people mean. Someone modelling arguments wants `rebuts` and `concedes`; someone modelling systems wants `calls` and `owns`. Hard-coding the vocabulary makes the plugin wrong for everyone whose domain isn't ours.
+
+Once the vocabulary is open, a second problem follows immediately: a purple dash-dot line means nothing without a key. So this section covers the registry *and* the surface that explains it.
+
+### 15.2 Where kinds come from
+
+Three sources, merged in this precedence order (first match wins on name collision):
+
+1. **Built-ins** — `relates_to`, `depends_on`, `supports`, `contradicts`, `part_of`. Keep their curated color, dash, and direction. Always available, no setup.
+2. **Tag-discovered** — any property carrying the `semantic-connector` tag. This is the primary path for custom kinds: the user marks intent *in the graph*, where it belongs, instead of restating it in plugin config. Verified against a live DB graph — a property entity accepts additional tags alongside `:logseq.class/Property`, and this finds them:
+
+   ```clojure
+   [:find (pull ?p [:db/ident :block/title])
+    :where
+    [?p :block/tags ?t]
+    [?t :block/title "semantic-connector"]]
+   ```
+
+   The tag is attached to the property *page*, not a block — CLI equivalent is `upsert page --id <prop-id> --update-tags '["semantic-connector"]'`, and `upsert block` is rejected with `source must be a non-page block`. **Open question:** the in-app path for a user to tag a property needs confirming before this ships; if the UI makes it awkward, the explicit list below is the fallback and the tag becomes a power-user shortcut.
+3. **Explicit list** — a settings field naming properties to treat as relations, plus "add by name" in the popover. Covers two cases tag discovery can't: a property that doesn't exist yet (set up the canvas first, create the property later) and a user who would rather not tag anything.
+
+The marker tag name is itself a setting (default `semantic-connector`) so a graph that already uses a different convention can point at it.
+
+### 15.3 Matching becomes a lookup, not a regex
+
+Today `REL_KEY_RE` reconstructs idents from kind names and tolerates the graph-local suffix. With a registry sourced from the graph we already hold the real idents, so matching becomes a map lookup:
+
+```
+identToKind: Record<string, RelKind>   // ":user.property/rebuts-A1b2" -> "rebuts"
+```
+
+This deletes the regex, makes matching genuinely rename-stable (idents survive renames; the regex only appeared to), and is faster per property key.
+
+**The cost, stated plainly:** `buildTree` gains an async dependency — the ident map must be resolved before conversion. It is one cached query per graph, shared with the cache `reverse-refs.ts` already keeps, and invalidated on graph change. This is the bulk of the work in §15; the custom-keyword feature itself is nearly free once the map exists.
+
+### 15.4 Styling an open vocabulary
+
+- Built-ins keep their existing curated styles.
+- Custom kinds draw a slot from the palette by a stable hash of the kind name, so adding a sixth kind never reshuffles the first five.
+- The palette yields roughly 8 visually distinct (color, dash) pairs. Past that, styles repeat — the popover says so rather than pretending every kind is distinguishable.
+- **Direction cannot be inferred** from a name. Custom kinds default to directed (four of five built-ins are), with a per-kind undirected flip stored in settings.
+
+### 15.5 The Relations popover
+
+One button on the canvas toolbar, opening:
+
+- **Scope** — `Page` / `Graph` segmented control (§14.2).
+- **Connectors** — `Lazy` / `Always` / `Off` (§14.1).
+- **Labels** — the existing `showRelationshipLabels` toggle.
+- **Kinds** — the active vocabulary with a color/dash swatch each, a per-kind visibility toggle, and an "add by name" field. This is also the plugin's first **legend**, which an open vocabulary makes mandatory rather than nice-to-have.
+
+Rationale for a popover over toolbar controls: these settings are read *while looking at a diagram*, which is exactly where plugin settings are not; and the control count grows with the vocabulary, which a flat toolbar cannot absorb.
+
+**`mod+shift+g`** flips scope directly, for the toggle that gets used repeatedly. Registered through `registerCommandPalette` like the existing `mod+shift+o`, so it is discoverable in the palette as well.
+
+Both write through to the same persisted settings — the popover is a faster surface onto existing state, not a parallel one, so a flip made here survives a reload exactly as a settings change does.
+
+### 15.6 Out of scope
+
+Per-kind styling overrides (letting a user pick the color for `rebuts`). The hash assignment is deterministic and the legend explains it; hand-tuning is a later refinement if anyone asks.
