@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseCatalog, taggedWith, attachIdents } from "./discovery";
+import { parseCatalog, taggedWith, attachIdents, candidateProperties } from "./discovery";
 import { buildRegistry } from "./relations";
 
 const rows = [
@@ -79,5 +79,40 @@ describe("attachIdents", () => {
   it("resolves an explicit name to its ident once the property exists", () => {
     const defs = attachIdents(buildRegistry({ tagged: [], explicit: ["author"] }), catalog);
     expect(defs.find((d) => d.kind === "author")!.ident).toBe(":user.property/author-Z9");
+  });
+});
+
+describe("property type", () => {
+  it("reads the node type from either key shape", () => {
+    const out = parseCatalog([
+      [{ "db/ident": ":user.property/a-1", "block/title": "a", ":logseq.property/type": "node" }],
+      [{ "db/ident": ":user.property/b-2", "block/title": "b", "logseq.property/type": "number" }],
+    ]);
+    expect(out.map((p) => p.type)).toEqual(["node", "number"]);
+  });
+
+  it("leaves type undefined when absent", () => {
+    const out = parseCatalog([[{ "db/ident": ":user.property/c-3", "block/title": "c" }]]);
+    expect(out[0].type).toBeUndefined();
+  });
+});
+
+describe("candidateProperties", () => {
+  const catalog = parseCatalog([
+    [{ "db/ident": ":user.property/rebuts-A1", "block/title": "rebuts", ":logseq.property/type": "node" }],
+    [{ "db/ident": ":user.property/cites-B2", "block/title": "cites", ":logseq.property/type": "node" }],
+    [{ "db/ident": ":user.property/effort-C3", "block/title": "Effort", ":logseq.property/type": "number" }],
+  ]);
+
+  it("offers node-typed properties that are not already kinds", () => {
+    expect(candidateProperties(catalog, new Set(["rebuts"]))).toEqual(["cites"]);
+  });
+
+  it("never offers a property that cannot hold a block reference", () => {
+    expect(candidateProperties(catalog, new Set())).not.toContain("Effort");
+  });
+
+  it("returns nothing when every node property is already a kind", () => {
+    expect(candidateProperties(catalog, new Set(["rebuts", "cites"]))).toEqual([]);
   });
 });

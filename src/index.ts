@@ -31,7 +31,7 @@ import { buildBadges, buildFocusHalo } from "./views/badges";
 import { edgeFocusArg } from "./views/visibility";
 import { selectGhosts, layoutGhosts, GHOST_CAP, type GhostNode } from "./views/ghosts";
 import { fetchIncomingRefs } from "./reverse-refs";
-import { refreshRegistry, type PropertyEntry } from "./discovery";
+import { refreshRegistry, candidateProperties, type PropertyEntry } from "./discovery";
 import { identToKind, registryKinds, relColor, relStyle } from "./relations";
 import { render, hitTest } from "./renderer";
 import { createState, fitToView, zoomIn, zoomOut, attachHandlers } from "./controller";
@@ -713,9 +713,7 @@ function setupCanvas(): void {
       labels: s.showRelationshipLabels,
       markerTag: s.markerTag,
       kinds,
-      candidates: propertyCatalog
-        .map((prop) => prop.title)
-        .filter((title) => !known.has(title)),
+      candidates: candidateProperties(propertyCatalog, known),
     });
   };
 
@@ -742,14 +740,17 @@ function setupCanvas(): void {
     popover.hidden = !next;
   };
 
+  const addKind = (name: string): void => {
+    const existing = parseNameList(getSettings().customKinds);
+    if (existing.includes(name)) return;
+    applyRelationSetting({ customKinds: [...existing, name].join(", ") });
+  };
+
   const addKindByName = (): void => {
     const input = document.getElementById("oc-pop-add-input") as HTMLInputElement | null;
     const name = input?.value.trim();
     if (!name) return;
-    const existing = parseNameList(getSettings().customKinds);
-    if (!existing.includes(name)) {
-      applyRelationSetting({ customKinds: [...existing, name].join(", ") });
-    }
+    addKind(name);
     if (input) input.value = "";
   };
 
@@ -788,6 +789,13 @@ function setupCanvas(): void {
     if (!input) return;
     if (input.id === "oc-pop-labels") {
       return applyRelationSetting({ showRelationshipLabels: input.checked });
+    }
+    const enable = input.getAttribute("data-enable-kind");
+    if (enable) {
+      // Checking a candidate is the same act as typing its name, minus the
+      // chance of typing it wrong.
+      if (input.checked) addKind(enable);
+      return;
     }
     const kind = input.getAttribute("data-kind");
     if (kind) {

@@ -61,6 +61,8 @@ Create whichever properties you need once on any block via Logseq's property UI,
 
 **Your own relationship kinds** — the five built-ins are just defaults. Any property becomes a relationship kind by tagging it `semantic-connector` (the tag name is configurable), or by naming it in **Extra Relationship Kinds** / the popover's add field. Custom kinds get a color and dash pattern assigned deterministically from their name, and are drawn with an arrowhead unless listed in **Undirected Kinds**.
 
+The popover's **Also in this graph** section lists every node-typed property that isn't a kind yet — tick one to enable it, no typing involved. (Only node-typed properties are offered; a text or number property can't hold a block reference, so it could never draw a connector.)
+
 You can add a name before the property exists — the kind appears in the legend marked **not in graph** and draws nothing until a property with that name shows up, at which point connectors appear on their own. Remove a kind you added with the `×` on its row; built-ins can only be hidden (uncheck them), and a tag-discovered kind goes away when you remove the marker tag from its property.
 
 **The Relations popover** — the ◈ canvas toolbar's relations button opens scope, connector visibility, labels, and the kind legend, so you can change what you're looking at without leaving the diagram. Each kind shows the exact line the canvas draws, with a checkbox to hide it. `Cmd/Ctrl+Shift+G` flips page ↔ graph scope directly.

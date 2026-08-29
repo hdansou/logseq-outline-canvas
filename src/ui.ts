@@ -31,7 +31,7 @@ export interface RelationsState {
   labels: boolean;
   markerTag: string;
   kinds: KindRow[];
-  /** Tagged/named properties in the graph that aren't kinds yet. */
+  /** Node-typed properties in the graph that aren't kinds yet. */
   candidates: string[];
 }
 
@@ -115,11 +115,23 @@ export function renderRelationsPopover(state: RelationsState): string {
     ? `<p class="oc-pop-note">Some kinds share a line style — the palette holds 8 distinct ones.</p>`
     : "";
 
-  const candidateNote = state.candidates.length
-    ? `<p class="oc-pop-note">Untagged node properties: ${state.candidates
-        .slice(0, 6)
-        .map((c) => esc(c))
-        .join(", ")}${state.candidates.length > 6 ? "…" : ""}. Tag one with <code>${esc(state.markerTag)}</code> or add it below.</p>`
+  // Everything else in the graph that *could* be a connector. Checking one
+  // enables it — no retyping a name the plugin already knows, and no way to
+  // typo it. Tagging the property with the marker tag has the same effect and
+  // travels with the graph.
+  const candidateBlock = state.candidates.length
+    ? `<div class="oc-pop-sep"></div>
+       <p class="oc-pop-label oc-pop-heading">Also in this graph</p>
+       <div class="oc-kinds">${state.candidates
+         .map(
+           (name) => `
+        <label class="oc-kind oc-kind--cand">
+          <input type="checkbox" data-enable-kind="${esc(name)}">
+          <span class="oc-kind-name">${esc(name)}</span>
+        </label>`
+         )
+         .join("")}</div>
+       <p class="oc-pop-note">Or tag a property <code>${esc(state.markerTag)}</code> to enable it everywhere.</p>`
     : "";
 
   return `
@@ -138,7 +150,7 @@ export function renderRelationsPopover(state: RelationsState): string {
     <div class="oc-pop-sep"></div>
     <div class="oc-kinds">${kindRows}</div>
     ${collisionNote}
-    ${candidateNote}
+    ${candidateBlock}
     <div class="oc-pop-add">
       <input type="text" id="oc-pop-add-input" placeholder="add a property name" spellcheck="false">
       <button class="oc-ctrl" id="oc-pop-add-btn">Add</button>
@@ -507,6 +519,10 @@ html, body, #app {
 
 .oc-kind-x:hover { background: var(--oc-border); color: var(--oc-text); }
 .oc-kind-x--none { cursor: default; }
+
+.oc-pop-heading { margin: 0 0 6px; }
+.oc-kind--cand .oc-kind-name { color: var(--oc-text-muted); }
+.oc-kind--cand:hover .oc-kind-name { color: var(--oc-text); }
 
 .oc-pop-note {
   margin: 8px 0 0;

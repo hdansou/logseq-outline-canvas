@@ -14,6 +14,8 @@ export interface PropertyEntry {
   ident: string;
   title: string;
   tags: string[];
+  /** Logseq property type. Only `node` properties can hold a block reference. */
+  type?: string;
 }
 
 /** Default marker tag. Overridable so a graph with its own convention fits. */
@@ -48,7 +50,13 @@ export function parseCatalog(rows: unknown[] | undefined): PropertyEntry[] {
       }
     }
 
-    out.push({ ident, title, tags });
+    const type =
+      str(entity[":logseq.property/type"]) ??
+      str(entity["logseq.property/type"]) ??
+      str(entity.type) ??
+      undefined;
+
+    out.push({ ident, title, tags, ...(type ? { type } : {}) });
   }
 
   return out;
@@ -75,11 +83,28 @@ export function attachIdents(defs: RelationDef[], catalog: PropertyEntry[]): Rel
   return defs.map((def) => (def.ident ? def : { ...def, ident: byTitle.get(def.kind) }));
 }
 
+/**
+ * Properties worth offering as relationship kinds: node-typed (anything else
+ * cannot hold a block reference, so it could never draw a connector) and not
+ * already part of the vocabulary.
+ */
+export function candidateProperties(
+  catalog: PropertyEntry[],
+  known: Set<string>
+): string[] {
+  const out: string[] = [];
+  for (const prop of catalog) {
+    if (prop.type !== "node" || known.has(prop.title) || out.includes(prop.title)) continue;
+    out.push(prop.title);
+  }
+  return out;
+}
+
 /** Pull every user property with its tags. One query per refresh. */
 export async function fetchPropertyCatalog(): Promise<PropertyEntry[]> {
   try {
     const rows = await logseq.DB.datascriptQuery<unknown[]>(
-      `[:find (pull ?p [:db/ident :block/title {:block/tags [:block/title]}])
+      `[:find (pull ?p [:db/ident :block/title :logseq.property/type {:block/tags [:block/title]}])
         :where
         [?p :block/tags :logseq.class/Property]
         [?p :db/ident ?i]
