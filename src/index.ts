@@ -30,6 +30,7 @@ import type { LogseqBlock } from "./adapter";
 import { buildEdgeElements, buildEdgeLabels } from "./views/edges";
 import { buildBadges, buildFocusHalo } from "./views/badges";
 import { edgeFocusArg } from "./views/visibility";
+import { shouldReloadForRoute } from "./navigation";
 import { selectGhosts, layoutGhosts, GHOST_CAP, type GhostNode } from "./views/ghosts";
 import { fetchIncomingRefs } from "./reverse-refs";
 import { refreshRegistry, candidateProperties, type PropertyEntry } from "./discovery";
@@ -80,6 +81,14 @@ let ctx: CanvasRenderingContext2D | null = null;
 let controllerState = createState();
 let cleanupController: (() => void) | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * Set when the canvas was opened on a specific block (slash command or block
+ * context menu). Such a canvas stays on that block instead of following page
+ * navigation.
+ */
+let pinnedBlockUuid: string | null = null;
+/** Page the canvas last rendered, so repeat route events are cheap no-ops. */
+let lastPageKey: string | null = null;
 
 /**
  * Off-page endpoints for `relationshipScope: "graph"`. Resolving them needs
@@ -326,6 +335,34 @@ function setFocus(uuid: string | null): void {
 }
 
 /**
+ * Identity of the page the user is on. Prefers uuid over name so a rename
+ * doesn't read as navigation.
+ */
+async function currentPageKey(): Promise<string | null> {
+  try {
+    const page = await logseq.Editor.getCurrentPage();
+    if (!page) return null;
+    const p = page as Record<string, unknown>;
+    const key = (p.uuid as string) ?? (p.originalName as string) ?? (p.name as string);
+    return key ? String(key) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Coalesce reload triggers. Navigation and the DB-change stream both land
+ * here, so a page switch that also fires DB events reloads once, not twice.
+ */
+function scheduleReload(delayMs: number): void {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    debounceTimer = null;
+    loadTree(pinnedBlockUuid ?? undefined);
+  }, delayMs);
+}
+
+/**
  * Make sure the vocabulary matches the graph and settings before any tree is
  * built — the adapter resolves property keys through the registry, so a stale
  * registry means missing connectors. Cheap when nothing changed: one string
@@ -348,6 +385,11 @@ async function ensureRegistry(): Promise<void> {
 async function loadTree(blockUuid?: string): Promise<void> {
   await ensureRegistry();
   const settings = getSettings();
+
+  // Remember what this canvas is scoped to; the route handler reads both.
+  pinnedBlockUuid = blockUuid ?? null;
+  lastPageKey = blockUuid ? null : await currentPageKey();
+
   currentTree = blockUuid
     ? await fetchBlockTree(blockUuid, settings.showEmptyBlocks)
     : await fetchTree(settings.showEmptyBlocks);
@@ -1136,15 +1178,33 @@ async function main(): Promise<void> {
   // Live updates via DB.onChanged (debounced)
   const offChanged = logseq.DB.onChanged(() => {
     if (!logseq.isMainUIVisible) return;
-    if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      // A change may have tagged a property, which changes the vocabulary
-      // without changing any setting — so re-derive rather than trust the
-      // signature.
-      registrySignature = null;
-      loadTree();
-    }, 500);
+    // A change may have tagged a property, which changes the vocabulary
+    // without changing any setting — so re-derive rather than trust the
+    // signature.
+    registrySignature = null;
+    scheduleReload(500);
   });
+
+  // Follow the user to another page. Without this the canvas keeps rendering
+  // the page it was opened on until you close and reopen it.
+  //
+  // Shorter debounce than the DB stream: navigation is a direct user action
+  // and should feel immediate, while DB changes arrive in bursts.
+  const offRoute = logseq.App.onRouteChanged(async () => {
+    if (!logseq.isMainUIVisible) return;
+    const nextPageKey = await currentPageKey();
+    if (!shouldReloadForRoute({
+      visible: true,
+      pinnedBlockUuid,
+      nextPageKey,
+      lastPageKey,
+    })) {
+      return;
+    }
+    lastPageKey = nextPageKey;
+    scheduleReload(120);
+  });
+  if (typeof offRoute === "function") offHooks.push(offRoute);
   if (typeof offChanged === "function") offHooks.push(offChanged);
 
   // Settings change — re-inject host CSS + re-apply dock geometry when either

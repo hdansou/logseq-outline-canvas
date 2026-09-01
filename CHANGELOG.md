@@ -23,6 +23,10 @@ All notable changes to OutlineCanvas are documented here. Format follows [Keep a
   - Ghosts are capped (12, most-connected first) with a `+N more off-page` note; badge counts still report true totals so a capped diagram never understates a node's connectivity.
   - Ghosts carry their real uuid, so click-to-navigate works on them like any node.
 
+### Fixed
+
+- **The canvas follows page navigation.** It previously loaded its tree on open and on DB change only, so navigating to another page left the old diagram on screen until you closed and reopened it. A canvas opened on a specific block still stays pinned to that block, and route events that resolve to the same page (in-page anchors) no longer discard your pan, zoom, and focused node.
+
 ### Changed
 
 - Theme tokens `connectorDepends` / `connectorRelates` are replaced by a per-kind `rel` color map plus `badgeOut` / `badgeIn` for the count badges (which aggregate across kinds and were never kind-specific).

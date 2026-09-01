@@ -12,12 +12,14 @@ Ran `/production-readiness` after the dock-mode rework. Baseline clean: 64 tests
 
 ## Known bugs
 
-### Canvas does not follow page navigation (found 2026-08-31)
+### ~~Canvas does not follow page navigation~~ — fixed 2026-08-31
 The canvas loads its tree when opened and on `logseq.DB.onChanged`, but nothing listens for route changes — navigating to another page leaves the previous page's diagram on screen until you close and reopen the canvas. Surfaced while smoke-testing the vite bump.
-- [ ] Register `logseq.App.onRouteChanged` (and/or `onPageHeadActionsSlotted`) to reload the tree when the current page changes while the canvas is visible
-- [ ] Skip the reload when the canvas is hidden, and respect the existing 500ms debounce so a burst of navigation doesn't thrash
-- [ ] Preserve focus/pan when the route change resolves to the *same* page (Logseq fires route events for in-page anchors too)
-- [ ] Decide the block-scoped case: a canvas opened on a specific block via the macro/command should probably stay pinned to that block rather than follow navigation
+- [x] `logseq.App.onRouteChanged` reloads the tree when the page changes while the canvas is visible
+- [x] Hidden canvas does nothing; navigation and DB changes share one debounce (`scheduleReload`) so a page switch that also fires DB events reloads once
+- [x] Same-page route events (in-page anchors) are ignored, preserving pan/zoom/focus; page identity prefers uuid over name so a rename doesn't read as navigation
+- [x] Block-scoped canvases stay pinned — `pinnedBlockUuid` is set by `loadTree` and short-circuits the route handler
+- [x] Non-page routes (search, settings) keep the current diagram rather than blanking it
+- Decision logic lives in `src/navigation.ts` as a pure predicate with 6 tests; **verified live** that the canvas follows page→page navigation. The pinned-block path is unit-tested but was **not** exercised live — driving the `/outline` slash command through the UI didn't cooperate and I stopped rather than grind on it.
 
 ## Production-hardening pass (2026-08-31)
 
