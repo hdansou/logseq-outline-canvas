@@ -1,6 +1,6 @@
 # OutlineCanvas — Task Tracker
 
-**Last Updated:** 2026-08-29
+**Last Updated:** 2026-08-31
 
 ## Production-hardening pass (2026-05-16)
 
@@ -9,6 +9,24 @@ Ran `/production-readiness` after the dock-mode rework. Baseline clean: 64 tests
 **Applied:** C1 (CHANGELOG `[Unreleased]` section describing `dockBehavior`, `dockWidth`, drag handle), C2 (README docked-mode section rewritten to match the new behavior).
 
 **Deferred:** B1 — decompose `src/index.ts` (778 lines) into `dock-mode.ts` / `macro-renderer.ts` / `event-wiring.ts`. Not urgent; pick up in a focused session.
+
+## Production-hardening pass (2026-08-31)
+
+Ran `/production-readiness` after the relationship-vocabulary work. Baseline green before changes: typecheck clean, 149 tests, build OK.
+
+**Applied — category D (dependency vulnerabilities), 5 advisories → 0:**
+- [x] `vite` `^8.0.10` → `^8.0.16` (direct, high: `server.fs.deny` bypass + launch-editor NTLM disclosure). Caret resolved to **8.2.2**, a minor bump — verified the plugin still installs, renders, and boots clean in a live graph, not just that the build exits 0.
+- [x] `dompurify` override `^3.4.2` → `^3.4.14`. The old override was **stale and ineffective**: it pinned exactly 3.4.2, which the advisory still covers (`<=3.4.12`). This is the trap the skill warns about — an override that looks applied but resolves to a vulnerable version.
+- [x] `postcss` (8.5.26) and `nanoid` (3.3.18) cleared transitively via the vite bump; no override needed.
+- Verified `vitest@4.1.5` does not peer-pin vite, so no test-runner cascade. `lodash-es: ^4.18.1` override checked and left alone (valid, installed).
+
+**Deferred — offered but not chosen this pass:**
+- **A:** three near-identical uuid tree walks (`treeSignature`/`treeUuidSet` in `index.ts`, `treeUuids` in `adapter.ts`) → collapse to one exported `collectUuids`.
+- **C:** `CLAUDE.md:54` + `scripts/logseq-smoke.sh:59` still call `load_plugin_from_web_url_BANG_`, which no longer exists — the smoke script is silently broken. `CLAUDE.md` architecture list omits `relations.ts`, `discovery.ts`, `reverse-refs.ts`, `views/ghosts.ts`, `views/visibility.ts`. `scripts/logseq-dev-up.sh` still defaults to :8080 (collides with logseq-bermaid; caused a wrong-plugin install during E2E).
+- **E:** `docs/outline-canvas-v2.html` (36K) tracked — intentional reference or dead weight? Open question.
+- **B:** decompose `src/index.ts` (now 1203 lines, was 778 when first flagged). Hold until this branch merges.
+
+**Noted, not a finding:** the canvas doesn't refresh on page navigation — it reloads on open and on DB change only. Pre-existing behaviour, surfaced while smoke-testing.
 
 ## Completed (unreleased)
 

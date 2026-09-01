@@ -57,12 +57,12 @@
   "devDependencies": {
     "@logseq/libs": "^0.3.3",
     "typescript": "^5.0.0",
-    "vite": "^8.0.10",
+    "vite": "^8.0.16",
     "vite-plugin-logseq": "^1.1.2",
     "vitest": "^4.1.5"
   },
   "overrides": {
-    "dompurify": "^3.4.2",
+    "dompurify": "^3.4.14",
     "lodash-es": "^4.18.1"
   }
 }
