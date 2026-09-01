@@ -54,6 +54,7 @@ npm run build      # Production build to dist/
 ```bash
 scripts/logseq-dev-up.sh   # idempotent: starts pnpm watch (logseq repo) + npx vite if needed
 scripts/logseq-smoke.sh    # opens canvas, clicks ⊞ / ✕ / Treemap, asserts state
+scripts/e2e/               # relationship fixtures — see scripts/e2e/README.md
 ```
 
 The smoke script asserts host-side state — `.lsp-iframe-sandbox-container.style.cssText` and `#right-sidebar` visibility — because the iframe at :8090 is cross-origin from Logseq at :3001.
