@@ -10,6 +10,15 @@ Ran `/production-readiness` after the dock-mode rework. Baseline clean: 64 tests
 
 **Deferred:** B1 — decompose `src/index.ts` (778 lines) into `dock-mode.ts` / `macro-renderer.ts` / `event-wiring.ts`. Not urgent; pick up in a focused session.
 
+## Known bugs
+
+### Canvas does not follow page navigation (found 2026-08-31)
+The canvas loads its tree when opened and on `logseq.DB.onChanged`, but nothing listens for route changes — navigating to another page leaves the previous page's diagram on screen until you close and reopen the canvas. Surfaced while smoke-testing the vite bump.
+- [ ] Register `logseq.App.onRouteChanged` (and/or `onPageHeadActionsSlotted`) to reload the tree when the current page changes while the canvas is visible
+- [ ] Skip the reload when the canvas is hidden, and respect the existing 500ms debounce so a burst of navigation doesn't thrash
+- [ ] Preserve focus/pan when the route change resolves to the *same* page (Logseq fires route events for in-page anchors too)
+- [ ] Decide the block-scoped case: a canvas opened on a specific block via the macro/command should probably stay pinned to that block rather than follow navigation
+
 ## Production-hardening pass (2026-08-31)
 
 Ran `/production-readiness` after the relationship-vocabulary work. Baseline green before changes: typecheck clean, 149 tests, build OK.
@@ -20,13 +29,18 @@ Ran `/production-readiness` after the relationship-vocabulary work. Baseline gre
 - [x] `postcss` (8.5.26) and `nanoid` (3.3.18) cleared transitively via the vite bump; no override needed.
 - Verified `vitest@4.1.5` does not peer-pin vite, so no test-runner cascade. `lodash-es: ^4.18.1` override checked and left alone (valid, installed).
 
+**Applied — categories A, C, E (second sitting, same day):**
+- [x] **A:** three near-identical uuid tree walks collapsed into one exported `collectUuids(root)` in `adapter.ts`; `treeSignature` is now a one-liner over it and `treeUuidSet` is gone. `index.ts` 1203 → 1189 lines.
+- [x] **C:** `scripts/logseq-smoke.sh` no longer calls the removed `load_plugin_from_web_url_BANG_` — it checks for the plugin iframe and prints the manual install steps instead of appearing to install and then asserting nothing.
+- [x] **C:** dev-server port moved 8080 → 8090 with `strictPort` in `vite.config.ts`, `logseq-dev-up.sh`, `logseq-smoke.sh`, `CLAUDE.md`, and `README.md`. 8080 collides with logseq-bermaid, and vite's silent fallback loaded the wrong plugin during E2E.
+- [x] **C:** `CLAUDE.md` architecture section now lists `relations.ts`, `discovery.ts`, `reverse-refs.ts`, `views/ghosts.ts`, `views/visibility.ts`, plus the open-vocabulary and ident-lookup patterns.
+- [x] **E:** repo hygiene verified clean — 57 tracked files, nothing ignored-but-tracked, no stray build output. `docs/outline-canvas-v2.html` is **intentional** (referenced from CLAUDE.md as the 8-view reference prototype); keeping it.
+- [x] **Extra, not on the punch list:** CI ran typecheck + build but never the tests. Added `npm test` to `.github/workflows/ci.yml` — 149 tests were passing locally and not gating merges.
+
 **Deferred — offered but not chosen this pass:**
-- **A:** three near-identical uuid tree walks (`treeSignature`/`treeUuidSet` in `index.ts`, `treeUuids` in `adapter.ts`) → collapse to one exported `collectUuids`.
-- **C:** `CLAUDE.md:54` + `scripts/logseq-smoke.sh:59` still call `load_plugin_from_web_url_BANG_`, which no longer exists — the smoke script is silently broken. `CLAUDE.md` architecture list omits `relations.ts`, `discovery.ts`, `reverse-refs.ts`, `views/ghosts.ts`, `views/visibility.ts`. `scripts/logseq-dev-up.sh` still defaults to :8080 (collides with logseq-bermaid; caused a wrong-plugin install during E2E).
-- **E:** `docs/outline-canvas-v2.html` (36K) tracked — intentional reference or dead weight? Open question.
 - **B:** decompose `src/index.ts` (now 1203 lines, was 778 when first flagged). Hold until this branch merges.
 
-**Noted, not a finding:** the canvas doesn't refresh on page navigation — it reloads on open and on DB change only. Pre-existing behaviour, surfaced while smoke-testing.
+**Promoted to a tracked bug:** the canvas doesn't refresh on page navigation — see "Known bugs" above.
 
 ## Completed (unreleased)
 
