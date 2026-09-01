@@ -1,7 +1,7 @@
 {
   "name": "logseq-plugin-outline-canvas",
   "author": "Danzu",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Renders hierarchical block trees as interactive visual diagrams using Canvas2D",
   "license": "MIT",
   "homepage": "https://github.com/hdansou/logseq-outline-canvas#readme",

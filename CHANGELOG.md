@@ -2,7 +2,9 @@
 
 All notable changes to OutlineCanvas are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [1.3.0] — 2026-08-31
+
+Relationship connectors grow from a fixed pair of kinds into an open vocabulary you define, reach across page boundaries, and get their own control surface on the canvas. 155 unit tests pass; `npm audit` clean.
 
 ### Added
 
