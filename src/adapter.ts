@@ -425,14 +425,18 @@ export async function fetchBlockTree(
   return node;
 }
 
-/** Collect every uuid present in the tree. */
-function treeUuids(root: TreeNode): Set<string> {
-  const present = new Set<string>();
+/**
+ * Every uuid in the tree, in render order. Order matters to one caller (the
+ * ghost cache keys off a stable signature), so this returns an array and
+ * callers that want membership build a Set from it.
+ */
+export function collectUuids(root: TreeNode): string[] {
+  const out: string[] = [];
   (function collect(n: TreeNode): void {
-    if (n.uuid) present.add(n.uuid);
+    if (n.uuid) out.push(n.uuid);
     for (const c of n.children) collect(c);
   })(root);
-  return present;
+  return out;
 }
 
 /**
@@ -446,7 +450,7 @@ function treeUuids(root: TreeNode): Set<string> {
  * Returns a structurally-cloned tree (input untouched).
  */
 export function filterRefsToSet(root: TreeNode, alsoAllowed: Set<string>): TreeNode {
-  const present = treeUuids(root);
+  const present = new Set(collectUuids(root));
 
   return (function walk(n: TreeNode): TreeNode {
     const refs = n.refs?.filter(
@@ -493,7 +497,7 @@ export function filterRefsByKind(root: TreeNode, hidden: Set<string>): TreeNode 
  * `relationshipScope: "graph"`; under `"page"` they are simply dropped.
  */
 export function collectExternalRefs(root: TreeNode): EdgeSpec[] {
-  const present = treeUuids(root);
+  const present = new Set(collectUuids(root));
   const out: EdgeSpec[] = [];
 
   (function walk(n: TreeNode): void {

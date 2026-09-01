@@ -23,6 +23,7 @@ import {
   filterRefsToSet,
   filterRefsByKind,
   collectExternalRefs,
+  collectUuids,
   defaultFetcher,
 } from "./adapter";
 import type { LogseqBlock } from "./adapter";
@@ -202,22 +203,7 @@ function composeElements(): void {
 
 /** Stable identity for a pruned tree: which blocks it renders, in order. */
 function treeSignature(root: TreeNode): string {
-  const parts: string[] = [];
-  (function walk(n: TreeNode): void {
-    if (n.uuid) parts.push(n.uuid);
-    for (const c of n.children) walk(c);
-  })(root);
-  return parts.join("|");
-}
-
-/** Every uuid rendered by the tree. */
-function treeUuidSet(root: TreeNode): Set<string> {
-  const out = new Set<string>();
-  (function walk(n: TreeNode): void {
-    if (n.uuid) out.add(n.uuid);
-    for (const c of n.children) walk(c);
-  })(root);
-  return out;
+  return collectUuids(root).join("|");
 }
 
 /**
@@ -233,7 +219,7 @@ async function refreshGhosts(pruned: TreeNode, signature: string): Promise<void>
   ghostRefreshInFlight = signature;
 
   try {
-    const treeUuids = treeUuidSet(pruned);
+    const treeUuids = new Set(collectUuids(pruned));
     const outgoing = collectExternalRefs(pruned);
 
     const incomingAll = await fetchIncomingRefs([...treeUuids], identToKind());
