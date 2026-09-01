@@ -8,7 +8,7 @@
 # Usage:
 #   scripts/logseq-smoke.sh
 #
-# Cross-origin reality check: the plugin iframe is hosted at :8080 while Logseq
+# Cross-origin reality check: the plugin iframe is hosted at :8090 while Logseq
 # is at :3001, so we can't read .contentDocument. Instead we:
 #   - click inside the iframe via playwright-cli refs parsed from snapshots,
 #   - assert *from the host context* on the container's style / sidebar CSS,
@@ -16,7 +16,7 @@
 set -euo pipefail
 
 PLUGIN_ID="logseq-plugin-outline-canvas"
-PLUGIN_URL="http://localhost:8080"
+PLUGIN_URL="${PLUGIN_URL:-http://localhost:8090}"
 LOGSEQ_URL="http://localhost:3001/index.html#/"
 
 pc() { playwright-cli "$@"; }
@@ -55,14 +55,33 @@ pc open >/dev/null
 echo "→ opening logseq"
 pc goto "$LOGSEQ_URL" >/dev/null
 
-echo "→ installing plugin programmatically"
-pc eval "(function(){ window.frontend.handler.plugin.load_plugin_from_web_url_BANG_('${PLUGIN_URL}'); return 'ok'; })()" >/dev/null
-for i in {1..30}; do
+# Programmatic install is gone. `window.frontend.handler` on Logseq >= 2.0
+# exposes only { user, common, db_based } — load_plugin_from_web_url_BANG_ was
+# removed, and the URL-install flow lives in a ClojureScript namespace that is
+# not reachable from window.*. LSPluginCore.register is the *registration*
+# step, not the install (which fetches package.json and parses the manifest
+# first), so it is not a substitute.
+#
+# The script therefore expects the plugin to be installed already and tells you
+# how if it is not, rather than appearing to work and then asserting nothing.
+echo "→ checking plugin is installed"
+for i in {1..15}; do
   count=$(eval_js "document.querySelectorAll('.lsp-iframe-sandbox-container').length")
   [[ "$count" == "1" ]] && break
   sleep 1
 done
-[[ "$count" == "1" ]] || { echo "plugin iframe never appeared"; exit 1; }
+if [[ "${count:-0}" != "1" ]]; then
+  cat <<MSG
+plugin iframe not found — install it once by hand, then re-run:
+
+  Settings → Advanced → Developer mode (on)
+  ⋯ → Plugins → ⋯ (top right) → Load plugin from web url
+  ${PLUGIN_URL}
+
+The install survives reloads, so this is a one-time step per Logseq profile.
+MSG
+  exit 1
+fi
 echo "  ✓ plugin iframe mounted"
 
 echo "→ clicking toolbar button"

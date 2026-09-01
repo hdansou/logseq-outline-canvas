@@ -127,7 +127,7 @@ npm run dev
 
 1. In Logseq, go to **Settings > Advanced** and enable **Developer mode**
 2. Click **...** menu > **Plugins** > three-dot menu > **Load plugin from web url**
-3. Enter `http://127.0.0.1:8080/` and click **Install**
+3. Enter `http://127.0.0.1:8090/` and click **Install**
 
 ### Production build
 

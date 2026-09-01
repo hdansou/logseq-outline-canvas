@@ -11,7 +11,11 @@ export default defineConfig({
   },
   server: {
     host: "127.0.0.1",
-    port: 8080,
+    // Several plugins in this workspace default to 8080 and vite falls back
+    // silently when it is taken, which loads the wrong plugin into Logseq.
+    // strictPort makes a collision fail loudly instead.
+    port: 8090,
+    strictPort: true,
     cors: true,
   },
 });

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Idempotently bring up the two services needed to test the plugin end-to-end:
 #   - Logseq web app   (http://localhost:3001, started via `yarn watch` in the logseq repo)
-#   - Plugin dev server (http://localhost:8080, started via `npx vite` in this repo)
+#   - Plugin dev server (http://localhost:8090, started via `npx vite` in this repo)
 #
 # Both are no-ops if already listening. Pass --fresh to kill-and-restart.
 #
@@ -15,7 +15,11 @@ PLUGIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOGSEQ_LOG="/tmp/logseq-watch.log"
 PLUGIN_LOG="/tmp/plugin-vite.log"
 LOGSEQ_PORT=3001
-PLUGIN_PORT=8080
+# 8080 is the default for several plugins in this workspace, and vite silently
+# falls back to 8081, 8082… when it is taken — which loads the *wrong* plugin.
+# Pinned to a port unique to this one, with --strictPort so a collision fails
+# loudly instead of quietly serving someone else's package.json.
+PLUGIN_PORT=8090
 WAIT_SECS=180
 
 fresh=0
@@ -44,7 +48,7 @@ start_logseq() {
 
 start_plugin() {
   echo "starting plugin vite -> $PLUGIN_LOG"
-  ( cd "$PLUGIN_DIR" && nohup npx vite >"$PLUGIN_LOG" 2>&1 & )
+  ( cd "$PLUGIN_DIR" && nohup npx vite --port "$PLUGIN_PORT" --strictPort >"$PLUGIN_LOG" 2>&1 & )
 }
 
 wait_for_http() {
